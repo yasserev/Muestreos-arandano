@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Control de Pesos | Clamshell Arándano - Camposol</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=presentation">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navbar -->
+        <header class="navbar">
+            <div class="nav-brand">
+                <div class="brand-logo-badge">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+                <div class="brand-info">
+                    <div class="brand-title">
+                        Control de Pesos <span>Clamshell Arándano</span>
+                    </div>
+                    <div class="brand-subtitle">
+                        Aseguramiento de Calidad & Control Estadístico de Procesos (SPC) | Planta de Empaque
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <button class="btn btn-secondary" id="btn-toggle-presentation" title="Activar modo presentación enfocado en tecnologías">
+                    <i class="fa-solid fa-chalkboard-user"></i> <span id="btn-presentation-text">Presentación</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-toggle-filters" title="Ocultar o mostrar panel de filtros">
+                    <i class="fa-solid fa-sliders"></i> <span id="btn-toggle-filters-text">Ocultar Filtros</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-open-guide" title="Ver guía de interpretación de gráficos">
+                    <i class="fa-solid fa-circle-question"></i> Guía de Gráficos
+                </button>
+                <div class="status-pill" id="db-status-pill">
+                    <span class="pulse-dot"></span>
+                    <span id="db-status-text">Conectado: 43,897 registros</span>
+                </div>
+                <button class="btn btn-secondary btn-icon" id="btn-theme-toggle" title="Alternar tema oscuro / claro">
+                    <i class="fa-solid fa-moon" id="theme-icon"></i>
+                </button>
+                <button class="btn btn-secondary" id="btn-export-csv" title="Descargar datos filtrados en CSV">
+                    <i class="fa-solid fa-file-arrow-down"></i> Exportar CSV
+                </button>
+            </div>
+        </header>
+
+        <!-- Floating Button to reopen filters if sidebar is collapsed -->
+        <button type="button" class="floating-filter-toggle" id="btn-floating-filter-toggle" title="Mostrar filtros de análisis">
+            <i class="fa-solid fa-filter"></i> <span>Filtros</span>
+        </button>
+
+        <!-- Main Layout with Filters Sidebar & Dashboard Content -->
+        <div class="main-layout" id="main-layout">
+            <!-- Filter Sidebar -->
+            <aside class="sidebar-filters" id="sidebar-filters">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">
+                        <i class="fa-solid fa-filter"></i> Filtros
+                    </div>
+                    <div class="sidebar-header-actions">
+                        <button type="button" class="btn-text" id="btn-reset-filters" title="Restablecer todos los filtros">
+                            <i class="fa-solid fa-rotate-left"></i> Limpiar
+                        </button>
+                        <button type="button" class="btn-text" id="btn-collapse-sidebar" title="Ocultar panel de filtros">
+                            <i class="fa-solid fa-angles-left"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <form id="filter-form" class="filter-form">
+                    <!-- 1. Fecha -->
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <i class="fa-regular fa-calendar"></i> 1. Rango de Fecha
+                        </label>
+                        <div class="date-quick-presets">
+                            <button type="button" class="preset-btn" data-preset="all">Todo</button>
+                            <button type="button" class="preset-btn" data-preset="30d">30 días</button>
+                            <button type="button" class="preset-btn" data-preset="7d">7 días</button>
+                        </div>
+                        <div class="date-inputs">
+                            <div class="input-field-group">
+                                <span class="input-prefix">Desde</span>
+                                <input type="date" id="filter-fecha-desde" class="form-control">
+                            </div>
+                            <div class="input-field-group">
+                                <span class="input-prefix">Hasta</span>
+                                <input type="date" id="filter-fecha-hasta" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Turno -->
+                    <div class="filter-group">
+                        <label for="filter-turno" class="filter-label">
+                            <i class="fa-solid fa-clock"></i> 2. Turno
+                        </label>
+                        <select id="filter-turno" class="form-control">
+                            <option value="">Todos los Turnos</option>
+                            <option value="1">Turno 1</option>
+                            <option value="2">Turno 2</option>
+                        </select>
+                    </div>
+
+                    <!-- 3. Línea -->
+                    <div class="filter-group">
+                        <label for="filter-linea" class="filter-label">
+                            <i class="fa-solid fa-industry"></i> 3. Línea de Empaque
+                        </label>
+                        <select id="filter-linea" class="form-control">
+                            <option value="">Todas las Líneas</option>
+                        </select>
+                    </div>
+
+                    <!-- 4. Formato -->
+                    <div class="filter-group">
+                        <label for="filter-formato" class="filter-label">
+                            <i class="fa-solid fa-box-open"></i> 5. Formato
+                        </label>
+                        <select id="filter-formato" class="form-control">
+                            <option value="">Todos los Formatos</option>
+                        </select>
+                    </div>
+
+                    <!-- 5. Variedad -->
+                    <div class="filter-group">
+                        <label for="filter-variedad" class="filter-label">
+                            <i class="fa-solid fa-seedling"></i> 6. Variedad
+                        </label>
+                        <select id="filter-variedad" class="form-control">
+                            <option value="">Todas las Variedades</option>
+                        </select>
+                    </div>
+
+                    <!-- 6. Tipo Tecnología -->
+                    <div class="filter-group">
+                        <label for="filter-tecnologia" class="filter-label">
+                            <i class="fa-solid fa-shield-halved"></i> 7. Tipo Tecnología
+                        </label>
+                        <select id="filter-tecnologia" class="form-control">
+                            <option value="">Todas las Tecnologías</option>
+                        </select>
+                    </div>
+
+                    <!-- 7. Cliente -->
+                    <div class="filter-group">
+                        <label for="filter-cliente" class="filter-label">
+                            <i class="fa-solid fa-building"></i> 8. Cliente
+                        </label>
+                        <select id="filter-cliente" class="form-control">
+                            <option value="">Todos los Clientes</option>
+                        </select>
+                    </div>
+
+                    <!-- 8. Viaje -->
+                    <div class="filter-group">
+                        <label for="filter-viaje" class="filter-label">
+                            <i class="fa-solid fa-truck-ramp-box"></i> 4. Viaje / Lote
+                        </label>
+                        <input type="text" id="filter-viaje" class="form-control" placeholder="Buscar viaje ej: 4105...">
+                    </div>
+
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn-primary btn-block" id="btn-apply-filters">
+                            <i class="fa-solid fa-magnifying-glass"></i> Aplicar Filtros
+                        </button>
+                    </div>
+                </form>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="dashboard-content">
+                <!-- Loading Indicator Overlay -->
+                <div class="loading-overlay" id="loading-overlay">
+                    <div class="spinner-container">
+                        <div class="spinner"></div>
+                        <span class="loading-text">Calculando métricas y distribuciones...</span>
+                    </div>
+                </div>
+
+                <!-- Executive KPIs Grid -->
+                <section class="kpis-section">
+                    <!-- Card 1: Total Muestreos & Clamshells -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Muestreos Realizados</span>
+                            <div class="kpi-icon icon-blue">
+                                <i class="fa-solid fa-clipboard-check"></i>
+                            </div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value" id="kpi-total-muestreos">--</div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span class="kpi-meta" id="kpi-total-clamshells">-- clamshells pesados</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Peso Promedio & Límites -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Peso Promedio (g)</span>
+                            <div class="kpi-icon icon-indigo">
+                                <i class="fa-solid fa-weight-scale"></i>
+                            </div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value" id="kpi-peso-promedio">--</div>
+                            <span class="kpi-unit">g</span>
+                        </div>
+                        <div class="kpi-footer">
+                            <span class="kpi-meta" id="kpi-tolerancia">Límites: Min --g | Max --g</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: % En Rango (Cumplimiento) -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">% Cumplimiento (En Norma)</span>
+                            <div class="kpi-icon icon-green">
+                                <i class="fa-solid fa-circle-check"></i>
+                            </div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value value-green" id="kpi-pct-en-rango">--%</div>
+                        </div>
+                        <div class="kpi-footer">
+                            <div class="kpi-progress-bar">
+                                <div class="progress-fill fill-green" id="progress-en-rango" style="width: 0%"></div>
+                            </div>
+                            <span class="kpi-subtext" id="kpi-count-en-rango">-- unidades dentro</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: % Bajo Peso (Riesgo Calidad) -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">% Bajo Peso (&lt; Mínimo)</span>
+                            <div class="kpi-icon icon-red">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value value-red" id="kpi-pct-bajo-peso">--%</div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span class="kpi-alert-tag tag-red" id="kpi-tag-riesgo">Riesgo comercial</span>
+                            <span class="kpi-subtext" id="kpi-count-bajo-peso">-- unidades</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 5: % Sobrepeso & Giveaway -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">% Sobrepeso (Giveaway)</span>
+                            <div class="kpi-icon icon-amber">
+                                <i class="fa-solid fa-hand-holding-dollar"></i>
+                            </div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value value-amber" id="kpi-pct-sobrepeso">--%</div>
+                        </div>
+                        <div class="kpi-footer">
+                            <span class="kpi-meta" id="kpi-giveaway-g">+0.0 g / unidad exceso</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 6: Capacidad de Proceso Cp / Cpk -->
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Capacidad Proceso (Cpk)</span>
+                            <div class="kpi-icon icon-cyan">
+                                <i class="fa-solid fa-chart-line"></i>
+                            </div>
+                        </div>
+                        <div class="kpi-value-container">
+                            <div class="kpi-value" id="kpi-cpk">--</div>
+                            <span class="kpi-sub-badge" id="kpi-cp">Cp: --</span>
+                        </div>
+                        <div class="kpi-footer">
+                            <span class="badge-status" id="kpi-cpk-status">Evaluando</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. Comparativa de Sobrepeso por Tecnología: 4 Columnas Porcentuales (Hero Panel Full Width) -->
+                <section class="chart-panel hero-panel" id="panel-technology">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon"><i class="fa-solid fa-layer-group"></i></div>
+                            <div>
+                                <h3 class="panel-title">Control de Pesos por Tecnología: Rango Operativo (Mín/Máx) vs Peso Real</h3>
+                                <p class="panel-subtitle">Evaluación global ponderada (Base 100): Peso Venta (100%), Límite Mínimo, Límite Máximo y Peso Real medido</p>
+                            </div>
+                        </div>
+                        <div class="panel-header-actions">
+                            <div class="btn-group-pill" id="tech-view-mode-group">
+                                <button type="button" class="btn-pill active" id="btn-tech-mode-base" title="Escala base 100% (Venta 100% vs Mínimo vs Máximo vs Real)">
+                                    <i class="fa-solid fa-chart-column"></i> % Base 100 (Recomendado)
+                                </button>
+                                <button type="button" class="btn-pill" id="btn-tech-mode-dev" title="Porcentaje de variación adicional respecto al peso de venta (0%)">
+                                    <i class="fa-solid fa-percent"></i> % Desviación vs Venta
+                                </button>
+                            </div>
+                            <div class="panel-legend tech-legend">
+                                <span class="legend-item"><span class="dot dot-gray"></span> 1. Venta (100%)</span>
+                                <span class="legend-item"><span class="dot dot-cyan"></span> 2. Peso Mínimo</span>
+                                <span class="legend-item"><span class="dot dot-indigo"></span> 3. Peso Máximo</span>
+                                <span class="legend-item"><span class="dot dot-green"></span> 4. Peso Real (Conforme)</span>
+                                <span class="legend-item"><span class="dot dot-red"></span> 4. Peso Real (Bajo Mínimo)</span>
+                                <span class="legend-item"><span class="dot dot-amber"></span> 4. Peso Real (Sobre Máximo)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="chart-technology" class="chart-container-large"></div>
+                    </div>
+                </section>
+
+                <!-- 2. Evolución Temporal de una Sola Tecnología (Hero Panel Full Width) -->
+                <section class="chart-panel hero-panel" id="panel-tech-evolution">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon"><i class="fa-solid fa-chart-line"></i></div>
+                            <div>
+                                <h3 class="panel-title">Evolución Temporal de Tecnología: Banda de Tolerancia vs Peso Real</h3>
+                                <p class="panel-subtitle">Comportamiento cronológico porcentual ponderado: banda de tolerancia [Mínimo - Máximo] vs trayectoria del Peso Real</p>
+                            </div>
+                        </div>
+                        <div class="panel-header-actions">
+                            <div class="tech-select-wrapper">
+                                <label for="select-evolution-tech" class="control-label-inline"><i class="fa-solid fa-layer-group"></i> Tecnología:</label>
+                                <select id="select-evolution-tech" class="form-select select-compact">
+                                    <!-- Populated dynamically from /api/technologies -->
+                                </select>
+                            </div>
+                            <div class="btn-group-pill" id="tech-evolution-unit-group">
+                                <button type="button" class="btn-pill active" data-unit="day" id="btn-unit-day" title="Analizar evolución por Día">
+                                    <i class="fa-solid fa-calendar-day"></i> Día
+                                </button>
+                                <button type="button" class="btn-pill" data-unit="week" id="btn-unit-week" title="Analizar evolución por Semana">
+                                    <i class="fa-solid fa-calendar-week"></i> Semana
+                                </button>
+                                <button type="button" class="btn-pill" data-unit="month" id="btn-unit-month" title="Analizar evolución por Mes">
+                                    <i class="fa-solid fa-calendar"></i> Mes
+                                </button>
+                            </div>
+                            <div class="panel-legend tech-legend">
+                                <span class="legend-item"><span class="line-horizontal-sample line-sample-teal"></span> Rango Permitido [Mín - Máx]</span>
+                                <span class="legend-item"><span class="dot dot-green"></span> Peso Real Conforme</span>
+                                <span class="legend-item"><span class="dot dot-red"></span> Bajo Mínimo</span>
+                                <span class="legend-item"><span class="dot dot-amber"></span> Sobre Máximo</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="chart-tech-evolution" class="chart-container-large"></div>
+                    </div>
+                </section>
+
+                <!-- 3. Hero Chart: Scatter Plot (Dispersión de Pesos Individuales) -->
+                <section class="chart-panel hero-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon"><i class="fa-solid fa-braille"></i></div>
+                            <div>
+                                <h3 class="panel-title">Gráfico de Dispersión de Muestreos Individuales (T1 a T48)</h3>
+                                <p class="panel-subtitle">Comportamiento cronológico de cada clamshell vs Límites de Especificación (Mínimo / Máximo)</p>
+                            </div>
+                        </div>
+                        <div class="panel-legend">
+                            <span class="legend-item"><span class="dot dot-green"></span> En Norma</span>
+                            <span class="legend-item"><span class="dot dot-red"></span> Bajo Peso (&lt; Mín)</span>
+                            <span class="legend-item"><span class="dot dot-amber"></span> Sobrepeso (&gt; Máx)</span>
+                            <span class="legend-item"><span class="line line-red"></span> Límite Tolerancia</span>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="chart-scatter" class="chart-container-large"></div>
+                    </div>
+                </section>
+
+                <!-- Row 4: Histograma Normal & Gráfico de Control X-bar -->
+                <div class="charts-row">
+                    <!-- Histograma de Distribución y Gauss -->
+                    <section class="chart-panel">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <div class="panel-icon"><i class="fa-solid fa-chart-simple"></i></div>
+                                <div>
+                                    <h3 class="panel-title">Distribución de Frecuencia & Campana de Gauss</h3>
+                                    <p class="panel-subtitle">Histograma real vs Curva Normal ajustada (Media & Desviación Estándar)</p>
+                                </div>
+                            </div>
+                            <div class="panel-header-actions">
+                                <span class="badge-limits-subtle" id="bell-limits-tag" style="display: none;">
+                                    <i class="fa-solid fa-ruler-horizontal"></i> Límites: Mín --g | Máx --g
+                                </span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div id="chart-distribution" class="chart-container-medium"></div>
+                        </div>
+                    </section>
+
+                    <!-- Gráfico de Control X-bar -->
+                    <section class="chart-panel">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <div class="panel-icon"><i class="fa-solid fa-chart-line"></i></div>
+                                <div>
+                                    <h3 class="panel-title">Carta de Control Estadístico de Medias (Carta X̄)</h3>
+                                    <p class="panel-subtitle">Evolución de promedios de muestreo con Límites de Control Superior e Inferior (3σ)</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div id="chart-control" class="chart-container-medium"></div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Row 5: Comparativa de Líneas (Boxplot) & Cumplimiento por Línea -->
+                <div class="charts-row">
+                    <!-- Comparativa Boxplot por Línea -->
+                    <section class="chart-panel">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <div class="panel-icon"><i class="fa-solid fa-box-archive"></i></div>
+                                <div>
+                                    <h3 class="panel-title">Dispersión y Centrado por Línea de Empaque (Box Plot)</h3>
+                                    <p class="panel-subtitle">Mediana, cuartiles y rango de variación por línea para detectar balanzas desviadas</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div id="chart-boxplot" class="chart-container-medium"></div>
+                        </div>
+                    </section>
+
+                    <!-- Cumplimiento % por Línea (Barras Apiladas) -->
+                    <section class="chart-panel">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <div class="panel-icon"><i class="fa-solid fa-chart-column"></i></div>
+                                <div>
+                                    <h3 class="panel-title">% Cumplimiento y Desviación por Línea de Empaque</h3>
+                                    <p class="panel-subtitle">Desglose de % En Norma, % Bajo Peso y % Sobrepeso por cada línea</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div id="chart-compliance" class="chart-container-medium"></div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Detailed Data Table Section -->
+                <section class="chart-panel table-panel">
+                    <div class="panel-header table-header-flex">
+                        <div class="panel-title-group">
+                            <div class="panel-icon"><i class="fa-solid fa-table-list"></i></div>
+                            <div>
+                                <h3 class="panel-title">Registro Detallado de Muestreos</h3>
+                                <p class="panel-subtitle">Exploración de inspecciones con visor individual de los 48 clamshells pesados</p>
+                            </div>
+                        </div>
+                        <div class="table-pagination-meta">
+                            <span id="table-record-count">Mostrando 0 de 0 registros</span>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table" id="samples-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Hora</th>
+                                    <th>Turno</th>
+                                    <th>Línea</th>
+                                    <th>Formato</th>
+                                    <th>Variedad</th>
+                                    <th>Viaje</th>
+                                    <th>Cliente</th>
+                                    <th>Rango [Mín - Máx]</th>
+                                    <th>Promedio (g)</th>
+                                    <th>Desv. Est (g)</th>
+                                    <th>% En Norma</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                <tr>
+                                    <td colspan="13" class="text-center">Cargando registros de muestreo...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="table-pagination-footer">
+                        <div class="pagination-controls">
+                            <button class="btn btn-sm btn-secondary" id="btn-page-prev" disabled>
+                                <i class="fa-solid fa-chevron-left"></i> Anterior
+                            </button>
+                            <span class="pagination-page-indicator" id="pagination-indicator">Página 1 de 1</span>
+                            <button class="btn btn-sm btn-secondary" id="btn-page-next" disabled>
+                                Siguiente <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal: Detalle de Muestreo (Visualizador de 48 Clamshells) -->
+    <div class="modal-backdrop" id="sample-modal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title-group">
+                        <h4 class="modal-title" id="modal-title">Detalle del Muestreo</h4>
+                        <span class="modal-subtitle" id="modal-subtitle">Inspección de 48 Clamshells Individuales</span>
+                    </div>
+                    <button type="button" class="btn-close-modal" id="btn-close-modal">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <!-- Metadata Header Grid -->
+                    <div class="sample-meta-grid" id="modal-meta-grid">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <!-- Summary Stats Bar of this specific sample -->
+                    <div class="sample-stats-summary" id="modal-sample-stats">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <!-- Clamshells Grid (T1 to T48) -->
+                    <h5 class="section-title"><i class="fa-solid fa-boxes-stacked"></i> Pesajes Individuales (T1 - T48)</h5>
+                    <div class="clamshells-grid" id="modal-clamshells-grid">
+                        <!-- Clamshell cards populated dynamically -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-modal-dismiss">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Guía de Interpretación de Gráficos (SPC & Calidad) -->
+    <div class="modal-backdrop" id="guide-modal">
+        <div class="modal-dialog modal-dialog-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title-group">
+                        <h4 class="modal-title"><i class="fa-solid fa-book-open"></i> Guía de Interpretación de Gráficos</h4>
+                        <span class="modal-subtitle">Control Estadístico de Procesos (SPC) & Calidad en Planta de Empaque</span>
+                    </div>
+                    <button type="button" class="btn-close-modal" id="btn-close-guide-modal">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="modal-body guide-content">
+                    <!-- 1. Scatter Plot -->
+                    <div class="guide-card">
+                        <div class="guide-card-header">
+                            <div class="guide-num">1</div>
+                            <div>
+                                <h5>Gráfico de Dispersión de Muestreos Individuales (T1 a T48)</h5>
+                                <span class="guide-tag">Monitoreo en Tiempo Real & Desviaciones</span>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p><b>¿Qué muestra?</b> Cada pesaje individual (hasta 48 clamshells por lote) trazado en orden cronológico frente a las líneas de especificación: <span class="stat-pill pill-lcl">Peso Mínimo (LSL)</span>, <span class="stat-pill pill-ucl">Peso Máximo (USL)</span> y <span class="stat-pill">Peso Nominal (Target)</span>.</p>
+                            <p><b>¿Cómo interpretarlo?</b></p>
+                            <ul>
+                                <li><span class="dot dot-green"></span> <b>Puntos Verdes (En Norma):</b> Clamshells conformes dentro de la ventana de tolerancia comercial.</li>
+                                <li><span class="dot dot-red"></span> <b>Puntos Rojos (Bajo Peso):</b> Unidades que no alcanzan el peso mínimo legal/comercial. Riesgo crítico de <i>rechazo de contenedor, multas y reclamos en destino</i>.</li>
+                                <li><span class="dot dot-amber"></span> <b>Puntos Ámbar (Sobrepeso):</b> Exceso de fruta sobre el límite superior. Representa <i>Giveaway</i> (fruta regalada que reduce directamente el margen de ganancia).</li>
+                            </ul>
+                            <p><b>Relevancia industrial:</b> Permite detectar si hay dispersión irregular, deriva térmica o fatiga en balanzas a lo largo de las horas del turno.</p>
+                        </div>
+                    </div>
+
+                    <!-- 2. Histograma y Gauss -->
+                    <div class="guide-card">
+                        <div class="guide-card-header">
+                            <div class="guide-num">2</div>
+                            <div>
+                                <h5>Distribución de Frecuencia & Campana de Gauss (Ajuste Normal)</h5>
+                                <span class="guide-tag">Capacidad de Proceso & Variabilidad</span>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p><b>¿Qué muestra?</b> Las frecuencias reales agrupadas por peso frente a la curva normal ajustada basada en la <b>Media (μ)</b> y la <b>Desviación Estándar (σ)</b>.</p>
+                            <p><b>¿Cómo interpretarlo?</b></p>
+                            <ul>
+                                <li><b>Centrado:</b> Si la cúspide de la campana está alineada con el valor nominal objetivo, el proceso está centrado. Si está inclinada a la derecha, se está regalando fruta sistemáticamente.</li>
+                                <li><b>Ancho de la campana (Dispersión):</b> Una campana delgada y alta indica alta precisión (bajo σ). Una campana ancha indica descontrol y alta variabilidad en el llenado.</li>
+                                <li><b>Índices de Capacidad:</b>
+                                    <ul>
+                                        <li><span class="stat-pill">Cpk ≥ 1.33</span>: <b>Proceso Capaz</b> (Estándar internacional de excelencia, prácticamente cero defectos).</li>
+                                        <li><span class="stat-pill">1.00 ≤ Cpk &lt; 1.33</span>: <b>Aceptable</b> (Requiere supervisión continua).</li>
+                                        <li><span class="stat-pill">Cpk &lt; 1.00</span>: <b>Incapaz</b> (El proceso generará continuamente producto fuera de especificación).</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- 3. Carta X-bar -->
+                    <div class="guide-card">
+                        <div class="guide-card-header">
+                            <div class="guide-num">3</div>
+                            <div>
+                                <h5>Carta de Control Estadístico de Medias (Carta X̄)</h5>
+                                <span class="guide-tag">Estabilidad Estadística del Proceso</span>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p><b>¿Qué muestra?</b> El peso promedio de cada sesión de muestreo con la <b>Gran Media (X̄̄)</b> y los Límites de Control Estadístico a 3 sigmas: <span class="stat-pill pill-ucl">UCL (+3σ)</span> y <span class="stat-pill pill-lcl">LCL (-3σ)</span>.</p>
+                            <p><b>¿Cómo interpretarlo?</b></p>
+                            <ul>
+                                <li>Distingue entre <b>Variación Común</b> (aleatoria e inherente a la fruta) y <b>Causas Especiales</b> (puntos que tocan o sobrepasan las líneas de control UCL/LCL).</li>
+                                <li>Un punto fuera de control alerta de una anomalía operativa inmediata: cambio de lote de fruta, descalibración de balanza, cambio de operador o falla mecánica en la dosificadora.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- 4. Box Plot por Línea -->
+                    <div class="guide-card">
+                        <div class="guide-card-header">
+                            <div class="guide-num">4</div>
+                            <div>
+                                <h5>Comparativa Box Plot por Línea de Empaque (Cajas y Bigotes)</h5>
+                                <span class="guide-tag">Homogeneidad & Calibración de Balanzas</span>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p><b>¿Qué muestra?</b> Para cada línea (L1, L2, L3... XL1, ULMA, etc.), la <b>Mediana</b> (línea central), el 50% central de los pesajes (caja intercuartil Q1-Q3) y los rangos mínimo y máximo.</p>
+                            <p><b>¿Cómo interpretarlo?</b></p>
+                            <ul>
+                                <li>Permite a los jefes de empaque comparar el desempeño de las líneas simultáneamente.</li>
+                                <li>Si una línea tiene su caja visiblemente más arriba que las demás, sus balanzas están descalibradas en exceso (generando sobrecostos). Si la caja es muy alta/ancha, esa línea tiene operadores inconsistentes o balanzas defectuosas.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- 5. Cumplimiento por Línea -->
+                    <div class="guide-card">
+                        <div class="guide-card-header">
+                            <div class="guide-num">5</div>
+                            <div>
+                                <h5>% Cumplimiento y Desviación por Línea de Empaque</h5>
+                                <span class="guide-tag">Ranking Operativo & Control de Pérdidas</span>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p><b>¿Qué muestra?</b> Desglose visual en barras apiladas del 100% de la producción de cada línea dividida en: <span class="stat-pill" style="color:var(--color-green)">% En Norma</span>, <span class="stat-pill pill-lcl">% Bajo Peso</span> y <span class="stat-pill pill-ucl">% Sobrepeso</span>.</p>
+                            <p><b>¿Cómo interpretarlo?</b></p>
+                            <ul>
+                                <li>Prioriza de forma inmediata cuáles líneas de empaque necesitan intervención técnica, auditoría de calidad o calibración de pesaje en el siguiente turno.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- 6. Control de Pesos por Tecnología: 4 Columnas Porcentuales -->
+                    <div class="guide-card">
+                        <div class="guide-card-header">
+                            <div class="guide-num">6</div>
+                            <div>
+                                <h5>Control de Pesos por Tecnología: 4 Columnas Porcentuales Base 100</h5>
+                                <span class="guide-tag">Suma Global Ponderada & Señal de Cumplimiento</span>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p><b>¿Qué muestra?</b> Para evitar confusiones por mezcla de formatos de clamshell (125g, 510g, etc.), este gráfico calcula las sumas globales acumuladas de fruta para cada tecnología en el periodo filtrado y las presenta en <b>4 columnas comparativas base 100%</b>:</p>
+                            <ul>
+                                <li><b>1. Peso Venta (100%):</b> Base contractual requerida en destino (Columna I del Excel).</li>
+                                <li><b>2. Peso Mínimo con Tecnología:</b> Límite inferior requerido (ej. 102.5%) para contrarrestar la deshidratación del trayecto (Columna P).</li>
+                                <li><b>3. Peso Máximo de Control:</b> Límite superior de tolerancia operativa (ej. 103.7%) para evitar giveaway excesivo (Columna Q).</li>
+                                <li><b>4. Peso Real Medido:</b> Resultado efectivo medido en planta (ej. 102.0%) a partir de los muestreos (Columna BN).</li>
+                                <li><b>Señal de Cumplimiento (Badge):</b> Indica al instante si el peso real está dentro de rango (<code>✓ OK</code>), bajo el mínimo (<code>⚠️ -0.5%</code>) o con sobrepeso excesivo (<code>⚠️ +0.6%</code>).</li>
+                            </ul>
+                            <p><b>¿Cómo interpretarlo?</b> Si la 4ª columna (Real) está en rojo (bajo mínimo), la fruta llegará con peso deficiente a destino. Si está en ámbar (sobre máximo), se está perdiendo fruta innecesariamente. Si está en verde, el proceso está en óptimo control.</p>
+                        </div>
+                    </div>
+
+                    <!-- 7. Evolución Temporal de una Sola Tecnología -->
+                    <div class="guide-card">
+                        <div class="guide-card-header">
+                            <div class="guide-num">7</div>
+                            <div>
+                                <h5>Evolución Temporal de Tecnología: Banda de Tolerancia vs Peso Real</h5>
+                                <span class="guide-tag">Monitoreo Cronológico Ponderado (Día / Semana / Mes)</span>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p><b>¿Qué muestra?</b> Aplica la misma matemática de sumas globales para una tecnología específica a lo largo del tiempo (agrupada por <b>Día</b>, <b>Semana</b> o <b>Mes</b>):</p>
+                            <ul>
+                                <li><b>Banda de Tolerancia [Mínimo - Máximo]:</b> Área sombreada y líneas de referencia que delimitan la zona de control conforme (Base 100).</li>
+                                <li><b>Curva cronológica de Peso Real:</b> Puntos coloreados según su estado de cumplimiento con su señal de desviación porcentual en tooltip.</li>
+                            </ul>
+                            <p><b>¿Cómo interpretarlo?</b> Permite auditar si los ajustes de pesaje en balanza a lo largo de los días lograron corregir desviaciones y mantener el empaque dentro de la banda verde de calidad.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="btn-guide-modal-dismiss">Entendido</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Button for AI Chat Assistant -->
+    <button type="button" class="btn-chat-fab" id="btn-chat-fab" aria-label="Abrir Asistente IA de Calidad" title="Consultar con el Asistente IA sobre los datos del Excel">
+        <span class="chat-fab-pulse"></span>
+        <span class="chat-fab-badge">IA</span>
+        <i class="fa-solid fa-wand-magic-sparkles chat-icon-open" id="chat-icon-open"></i>
+        <i class="fa-solid fa-xmark chat-icon-close" id="chat-icon-close" style="display:none;"></i>
+    </button>
+
+    <!-- Floating Chat Drawer / Window -->
+    <aside class="chat-drawer" id="chat-drawer" aria-label="Asistente de Control de Pesos" style="display: none;">
+        <div class="chat-drawer-header">
+            <div class="chat-header-info">
+                <div class="chat-avatar">
+                    <i class="fa-solid fa-robot"></i>
+                    <span class="status-indicator-dot online" title="Conectado a la base de datos Excel"></span>
+                </div>
+                <div>
+                    <h4 class="chat-title">Asistente de Control de Pesos</h4>
+                    <span class="chat-subtitle"><i class="fa-solid fa-database"></i> Conectado al dataset Excel (43k+ muestras)</span>
+                </div>
+            </div>
+            <div class="chat-header-actions">
+                <button type="button" class="chat-btn-header" id="btn-chat-clear" title="Reiniciar conversación">
+                    <i class="fa-solid fa-arrow-rotate-left"></i>
+                </button>
+                <button type="button" class="chat-btn-header" id="btn-chat-minimize" title="Minimizar chat">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="chat-body" id="chat-messages">
+            <!-- Initial Welcome Message -->
+            <div class="chat-msg-row assistant">
+                <div class="chat-bubble-avatar"><i class="fa-solid fa-robot"></i></div>
+                <div class="chat-bubble">
+                    <div class="chat-bubble-text">
+                        <p>¡Hola! Soy tu asistente analítico de <b>Camposol</b>. Puedo responder preguntas sobre los <b>43,897 muestreos</b> y más de 1.3M de pesajes registrados en tu archivo Excel.</p>
+                        <p>Hazme una pregunta o elige una consulta rápida:</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Suggestion Chips -->
+            <div class="chat-suggestions" id="chat-suggestions">
+                <span class="suggestions-label"><i class="fa-regular fa-lightbulb"></i> Consultas rápidas:</span>
+                <div class="suggestions-pills">
+                    <button type="button" class="suggestion-pill" data-query="¿Cuál es la línea con mayor cumplimiento y menor sobrepeso?">
+                        🏆 ¿Mejor línea de empaque?
+                    </button>
+                    <button type="button" class="suggestion-pill" data-query="¿Qué formato tiene mayor sobrepeso y pérdida de giveaway?">
+                        📦 Sobrepeso por formato
+                    </button>
+                    <button type="button" class="suggestion-pill" data-query="¿Cómo se compara el desempeño entre el Turno 1 (Día) y Turno 2 (Noche)?">
+                        ⏱️ Comparar turnos 1 y 2
+                    </button>
+                    <button type="button" class="suggestion-pill" data-query="¿Cuál es el Cpk del formato 4.4 onz y cómo está centrado el proceso?">
+                        📈 Capacidad Cpk de 4.4 onz
+                    </button>
+                    <button type="button" class="suggestion-pill" data-query="¿Cuántos clamshells estuvieron bajo el peso mínimo y qué riesgo representan?">
+                        ⚠️ Riesgo de bajo peso
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-drawer-footer">
+            <form id="chat-form" class="chat-input-form">
+                <input type="text" id="chat-input" class="chat-input-field" placeholder="Escribe tu pregunta sobre líneas, turnos, pesos..." autocomplete="off">
+                <button type="submit" id="btn-chat-send" class="btn-chat-send" title="Enviar mensaje">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </form>
+            <div class="chat-footer-caption">
+                <span><i class="fa-solid fa-shield-check"></i> Respuestas validadas directamente con datos del Excel</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Custom Script -->
+    <script src="/static/js/dashboard.js?v=presentation_white_pill"></script>
+</body>
+</html>
