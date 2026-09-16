@@ -24,6 +24,9 @@ def sync_database_if_needed():
             cur_chk.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sobrepesos_tecnologia'")
             if not cur_chk.fetchone():
                 needs_rebuild = True
+            cur_chk.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='produccion'")
+            if not cur_chk.fetchone():
+                needs_rebuild = True
             conn_chk.close()
         except Exception:
             needs_rebuild = True
@@ -58,7 +61,8 @@ def sync_database_if_needed():
                     read_path = EXCEL_PATH
 
             wb = openpyxl.load_workbook(read_path, data_only=True, read_only=True)
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(DB_PATH, timeout=30.0)
+            conn.execute("PRAGMA journal_mode=WAL;")
             cur = conn.cursor()
 
             # 1. Sheet SOBREPESOS (Fixed dehydration overweight % per packaging technology)
@@ -81,7 +85,14 @@ def sync_database_if_needed():
             ctrl_sheet_name = 'Control Pesos' if 'Control Pesos' in wb.sheetnames else wb.sheetnames[0]
             ws_ctrl = wb[ctrl_sheet_name]
             rows_iter = ws_ctrl.iter_rows(values_only=True)
-            header = next(rows_iter)
+
+            # Skip header/blank rows until header row is reached
+            for r in rows_iter:
+                if r and len(r) > 1:
+                    r0_str = str(r[0]).strip().upper() if r[0] is not None else ''
+                    r1_str = str(r[1]).strip().upper() if r[1] is not None else ''
+                    if r0_str == 'FECHA' or r1_str == 'SEMANA':
+                        break
 
             cur.execute('DROP TABLE IF EXISTS muestreos')
             t_cols_sql = ', '.join([f't{i} REAL' for i in range(1, 49)])
@@ -123,9 +134,19 @@ def sync_database_if_needed():
 
             batch = []
             for idx, r in enumerate(rows_iter):
+                if not any(r):
+                    continue
+                # Ignore duplicate headers or non-numeric week
+                if r[1] is not None and not str(r[1]).strip().replace('.', '', 1).isdigit():
+                    continue
+
                 id_ctrl = f'ctrl_{idx+1}'
                 f = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else (str(r[0])[:10] if r[0] else None)
-                sem = int(r[1]) if r[1] is not None else None
+                try:
+                    sem = int(float(r[1])) if r[1] is not None else None
+                except (ValueError, TypeError):
+                    continue
+
                 turno = str(r[2]) if r[2] is not None else None
                 linea = str(r[3]) if r[3] is not None else None
                 ctrl_linea = str(r[4]) if r[4] is not None else None
@@ -173,6 +194,72 @@ def sync_database_if_needed():
             for col in ['fecha', 'semana', 'turno', 'linea', 'viaje', 'formato', 'variedad', 'tipo_tecnologia', 'cliente']:
                 cur.execute(f'CREATE INDEX IF NOT EXISTS idx_{col} ON muestreos({col})')
 
+            # 3. Sheet PRODUCCION (Total fruit production and kilograms per technology)
+            if 'PRODUCCION' in wb.sheetnames:
+                ws_prod = wb['PRODUCCION']
+                cur.execute('DROP TABLE IF EXISTS produccion')
+                cur.execute('''
+                    CREATE TABLE produccion (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        centro TEXT,
+                        almacen TEXT,
+                        material TEXT,
+                        texto_material TEXT,
+                        unidad TEXT,
+                        cantidad REAL,
+                        fecha_entrada TEXT,
+                        clase_mov TEXT,
+                        lote TEXT,
+                        fecha_contab TEXT,
+                        documento_material TEXT,
+                        viaje TEXT,
+                        peso_caja REAL,
+                        kilos REAL,
+                        tecnologia TEXT
+                    )
+                ''')
+                prod_iter = ws_prod.iter_rows(values_only=True)
+                for r in prod_iter:
+                    if r and len(r) > 27:
+                        r27_str = str(r[27]).strip().upper() if r[27] is not None else ''
+                        r28_str = str(r[28]).strip().upper() if len(r) > 28 and r[28] is not None else ''
+                        if r27_str == 'PESO' or r28_str.startswith('TEC'):
+                            break
+
+                prod_batch = []
+                for r in prod_iter:
+                    if not any(r):
+                        continue
+                    centro = str(r[0]) if r[0] is not None else None
+                    almacen = str(r[1]) if r[1] is not None else None
+                    material = str(r[2]) if r[2] is not None else None
+                    texto_mat = str(r[3]) if r[3] is not None else None
+                    unidad = str(r[4]) if r[4] is not None else None
+                    cant = float(r[5]) if (r[5] is not None and not isinstance(r[5], str)) else None
+                    f_ent = r[6].strftime('%Y-%m-%d') if hasattr(r[6], 'strftime') else (str(r[6])[:10] if r[6] else None)
+                    clase_mov = str(r[7]) if r[7] is not None else None
+                    lote = str(r[9]) if r[9] is not None else None
+                    f_con = r[10].strftime('%Y-%m-%d') if hasattr(r[10], 'strftime') else (str(r[10])[:10] if r[10] else None)
+                    doc_mat = str(r[12]) if r[12] is not None else None
+                    viaje = str(r[24]).strip() if (len(r) > 24 and r[24] is not None) else None
+                    peso_caja = float(r[26]) if (len(r) > 26 and r[26] is not None and not isinstance(r[26], str)) else None
+                    kilos = float(r[27]) if (len(r) > 27 and r[27] is not None and not isinstance(r[27], str)) else 0.0
+                    tech = str(r[28]).strip() if (len(r) > 28 and r[28] is not None) else 'Sin Tecnología'
+
+                    prod_batch.append((centro, almacen, material, texto_mat, unidad, cant, f_ent, clase_mov, lote, f_con, doc_mat, viaje, peso_caja, kilos, tech))
+
+                cur.executemany('''
+                    INSERT INTO produccion (
+                        centro, almacen, material, texto_material, unidad, cantidad,
+                        fecha_entrada, clase_mov, lote, fecha_contab, documento_material,
+                        viaje, peso_caja, kilos, tecnologia
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', prod_batch)
+
+                cur.execute('CREATE INDEX IF NOT EXISTS idx_prod_fecha ON produccion(fecha_contab)')
+                cur.execute('CREATE INDEX IF NOT EXISTS idx_prod_viaje ON produccion(viaje)')
+                cur.execute('CREATE INDEX IF NOT EXISTS idx_prod_tech ON produccion(tecnologia)')
+
             conn.commit()
             conn.close()
             print("Database sync complete.")
@@ -183,9 +270,106 @@ def sync_database_if_needed():
             except Exception:
                 pass
 
+def init_users_table(conn=None):
+    """Ensure the usuarios table exists and has a default administrator user."""
+    should_close = False
+    if conn is None:
+        conn = sqlite3.connect(DB_PATH, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        should_close = True
+
+    cur = conn.cursor()
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            nombre TEXT,
+            rol TEXT DEFAULT 'analista',
+            activo INTEGER DEFAULT 1,
+            creado_el TEXT
+        )
+    ''')
+
+    # Seed default admin user if table is empty
+    cur.execute("SELECT COUNT(*) FROM usuarios")
+    if cur.fetchone()[0] == 0:
+        import datetime
+        from werkzeug.security import generate_password_hash
+        now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        pwd_hash = generate_password_hash('camposol2026')
+        cur.execute('''
+            INSERT INTO usuarios (usuario, password, nombre, rol, activo, creado_el)
+            VALUES (?, ?, ?, ?, 1, ?)
+        ''', ('admin', pwd_hash, 'Administrador Calidad', 'admin', now_str))
+        conn.commit()
+        print("Default user 'admin' created in table 'usuarios'.")
+
+    if should_close:
+        conn.close()
+
+def verify_user_credentials(username, password):
+    """
+    Verify user login credentials.
+    Supports both hashed passwords and plain text passwords (in case the user manually
+    edits the SQL table and inserts plain text passwords).
+    Returns (success: bool, user_dict_or_error: dict/str).
+    """
+    if not username or not password:
+        return False, "Por favor, ingresa tu usuario y contraseña."
+
+    init_users_table()
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM usuarios WHERE LOWER(usuario) = LOWER(?)", (username.strip(),))
+    user = cur.fetchone()
+
+    if not user:
+        conn.close()
+        return False, "Usuario o contraseña incorrectos."
+
+    if not user["activo"]:
+        conn.close()
+        return False, "Este usuario se encuentra inactivo. Contacta al administrador."
+
+    stored_pwd = str(user["password"])
+    is_valid = False
+
+    # Check if hashed password
+    if stored_pwd.startswith(('pbkdf2:', 'scrypt:', 'argon2:')):
+        from werkzeug.security import check_password_hash
+        is_valid = check_password_hash(stored_pwd, password)
+    else:
+        # Plain text match for direct SQL table edits
+        if stored_pwd == password:
+            is_valid = True
+            try:
+                from werkzeug.security import generate_password_hash
+                new_hash = generate_password_hash(password)
+                cur.execute("UPDATE usuarios SET password = ? WHERE id = ?", (new_hash, user["id"]))
+                conn.commit()
+            except Exception:
+                pass
+
+    if is_valid:
+        user_dict = {
+            "id": user["id"],
+            "usuario": user["usuario"],
+            "nombre": user["nombre"] or user["usuario"],
+            "rol": user["rol"] or "analista"
+        }
+        conn.close()
+        return True, user_dict
+
+    conn.close()
+    return False, "Usuario o contraseña incorrectos."
+
 def get_connection():
     sync_database_if_needed()
-    conn = sqlite3.connect(DB_PATH)
+    init_users_table()
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -760,6 +944,16 @@ def get_technology_comparison(filters):
     cur = conn.cursor()
     cur.execute(query, params)
     rows = cur.fetchall()
+
+    # Load nominal sobrepeso percentages from the SOBREPESOS sheet
+    sobrepesos_map = {}
+    try:
+        cur.execute("SELECT TRIM(tecnologia), pct_deshidratacion FROM sobrepesos_tecnologia")
+        for sr in cur.fetchall():
+            sobrepesos_map[sr[0]] = float(sr[1]) if sr[1] is not None else 0.0
+    except Exception:
+        pass
+
     conn.close()
 
     technologies = []
@@ -774,12 +968,15 @@ def get_technology_comparison(filters):
         if s_v <= 0:
             continue
 
+        # Look up nominal sobrepeso from the SOBREPESOS sheet (no extra calculations)
+        pct_deshidratacion_nominal = sobrepesos_map.get(tec.strip(), 0.0)
+
         pct_venta = 100.0
-        pct_minimo = round((s_min / s_v) * 100.0, 1)
+        pct_minimo = round(100.0 + pct_deshidratacion_nominal * 100.0, 1)
         pct_maximo = round((s_max / s_v) * 100.0, 1)
         pct_real = round((s_real / s_v) * 100.0, 1)
 
-        pct_min_raw = (s_min / s_v) * 100.0
+        pct_min_raw = 100.0 + pct_deshidratacion_nominal * 100.0
         pct_max_raw = (s_max / s_v) * 100.0
         pct_real_raw = (s_real / s_v) * 100.0
 
@@ -1044,3 +1241,87 @@ def get_samples_table(filters, page=1, page_size=25, sort_by='fecha', sort_order
         "total_pages": int(np.ceil(total_count / page_size)) if total_count > 0 else 1,
         "items": items
     }
+
+def get_production_technology_distribution(filters=None):
+    """
+    Returns total kilos and percentage distribution per technology from PRODUCCION sheet.
+    Dynamically links with muestreos using the 8 dashboard filters (fecha, turno, linea,
+    viaje, formato, variedad, tipo_tecnologia, cliente).
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='produccion'")
+    if not cur.fetchone():
+        conn.close()
+        return {"items": [], "total_kilos": 0, "total_registros": 0}
+
+    where_sql, params = build_where_clause(filters) if filters else ("", [])
+
+    if where_sql:
+        m_viaje_sql = f"""
+            SELECT DISTINCT TRIM(viaje) 
+            FROM muestreos 
+            {where_sql} 
+              AND viaje IS NOT NULL 
+              AND TRIM(viaje) != ''
+        """
+        prod_conditions = [
+            "p.kilos IS NOT NULL",
+            f"TRIM(p.viaje) IN ({m_viaje_sql})"
+        ]
+        prod_params = list(params)
+
+        if filters and filters.get("tipo_tecnologia"):
+            prod_conditions.append("LOWER(p.tecnologia) = LOWER(?)")
+            prod_params.append(filters["tipo_tecnologia"])
+
+        query = f"""
+            SELECT 
+                p.tecnologia,
+                SUM(p.kilos) as total_kg,
+                COUNT(*) as reg_count
+            FROM produccion p
+            WHERE {' AND '.join(prod_conditions)}
+            GROUP BY p.tecnologia
+            ORDER BY total_kg DESC
+        """
+    else:
+        prod_params = []
+        query = """
+            SELECT 
+                p.tecnologia,
+                SUM(p.kilos) as total_kg,
+                COUNT(*) as reg_count
+            FROM produccion p
+            WHERE p.kilos IS NOT NULL
+            GROUP BY p.tecnologia
+            ORDER BY total_kg DESC
+        """
+
+    cur.execute(query, prod_params)
+    rows = cur.fetchall()
+
+    items = []
+    grand_total_kg = sum(r["total_kg"] for r in rows if r["total_kg"] is not None) if rows else 0.0
+    grand_total_reg = sum(r["reg_count"] for r in rows) if rows else 0
+
+    for r in rows:
+        tech = r["tecnologia"] or "Sin Tecnología"
+        kg = round(float(r["total_kg"]), 2) if r["total_kg"] is not None else 0.0
+        pct = round((kg / grand_total_kg * 100), 2) if grand_total_kg > 0 else 0.0
+        items.append({
+            "tecnologia": tech,
+            "kilos": kg,
+            "porcentaje": pct,
+            "registros": r["reg_count"]
+        })
+
+    conn.close()
+    return {
+        "items": items,
+        "total_kilos": round(grand_total_kg, 2),
+        "total_registros": grand_total_reg
+    }
+
+

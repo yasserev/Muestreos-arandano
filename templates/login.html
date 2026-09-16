@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión | Control de Pesos - Camposol</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            --primary: #0284c7;
+            --primary-hover: #0369a1;
+            --primary-glow: rgba(2, 132, 199, 0.25);
+            --accent-teal: #0d9488;
+            --bg-gradient: radial-gradient(circle at 10% 20%, rgba(2, 132, 199, 0.12) 0%, transparent 40%),
+                           radial-gradient(circle at 90% 80%, rgba(13, 148, 136, 0.10) 0%, transparent 40%),
+                           linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+            --card-bg: rgba(255, 255, 255, 0.90);
+            --card-border: rgba(226, 232, 240, 0.85);
+            --card-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+            --text-main: #0f172a;
+            --text-secondary: #64748b;
+            --input-bg: #f8fafc;
+            --input-border: #cbd5e1;
+            --input-focus: #0284c7;
+            --alert-bg: rgba(239, 68, 68, 0.08);
+            --alert-border: rgba(239, 68, 68, 0.25);
+            --alert-text: #b91c1c;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-gradient: radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.12) 0%, transparent 40%),
+                               radial-gradient(circle at 90% 80%, rgba(20, 184, 166, 0.08) 0%, transparent 40%),
+                               linear-gradient(135deg, #090d16 0%, #0f172a 100%);
+                --card-bg: rgba(15, 23, 42, 0.82);
+                --card-border: rgba(255, 255, 255, 0.08);
+                --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+                --text-main: #f8fafc;
+                --text-secondary: #94a3b8;
+                --input-bg: rgba(2, 6, 23, 0.6);
+                --input-border: rgba(255, 255, 255, 0.12);
+                --input-focus: #38bdf8;
+                --alert-bg: rgba(239, 68, 68, 0.15);
+                --alert-border: rgba(239, 68, 68, 0.35);
+                --alert-text: #fca5a5;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-gradient);
+            padding: 1.5rem;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient glow orbs */
+        body::before, body::after {
+            content: '';
+            position: absolute;
+            width: 420px;
+            height: 420px;
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: 0;
+            pointer-events: none;
+        }
+        body::before {
+            background: rgba(2, 132, 199, 0.15);
+            top: 5%;
+            left: 10%;
+        }
+        body::after {
+            background: rgba(13, 148, 136, 0.12);
+            bottom: 5%;
+            right: 10%;
+        }
+
+        .login-wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 440px;
+        }
+
+        .login-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 2.5rem 2.25rem;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            animation: fadeInCard 0.4s ease-out;
+        }
+
+        @keyframes fadeInCard {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Header Branding */
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .brand-badge-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%);
+            border-radius: 18px;
+            color: #ffffff;
+            font-size: 1.75rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 10px 25px rgba(2, 132, 199, 0.35);
+        }
+
+        .brand-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: -0.02em;
+            line-height: 1.25;
+        }
+
+        .brand-title span {
+            background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-top: 0.35rem;
+        }
+
+        /* Alert error banner */
+        .login-alert {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: var(--alert-bg);
+            border: 1px solid var(--alert-border);
+            border-radius: 10px;
+            color: var(--alert-text);
+            font-size: 0.82rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            animation: shakeAlert 0.3s ease;
+        }
+
+        @keyframes shakeAlert {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+
+        .login-alert i {
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.45rem;
+        }
+
+        .input-group {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            pointer-events: none;
+            transition: color 0.2s ease;
+        }
+
+        .form-input {
+            width: 100%;
+            font-family: var(--font-main);
+            font-size: 0.9rem;
+            color: var(--text-main);
+            background: var(--input-bg);
+            border: 1.5px solid var(--input-border);
+            border-radius: 12px;
+            padding: 0.75rem 2.8rem 0.75rem 2.65rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            border-color: var(--input-focus);
+            box-shadow: 0 0 0 3.5px var(--primary-glow);
+            background: #ffffff;
+        }
+
+        [data-theme="dark"] .form-input:focus {
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .input-group:focus-within .input-icon {
+            color: var(--primary);
+        }
+
+        .btn-toggle-pwd {
+            position: absolute;
+            right: 0.85rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.4rem;
+            font-size: 0.95rem;
+            border-radius: 6px;
+            transition: color 0.2s ease;
+        }
+
+        .btn-toggle-pwd:hover {
+            color: var(--text-main);
+        }
+
+        /* Submit Button */
+        .btn-submit {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.65rem;
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            border: none;
+            color: #ffffff;
+            font-family: var(--font-main);
+            font-size: 0.92rem;
+            font-weight: 700;
+            padding: 0.85rem;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(2, 132, 199, 0.35);
+            transition: all 0.2s ease;
+            margin-top: 1.75rem;
+        }
+
+        .btn-submit:hover {
+            background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 12px 25px rgba(2, 132, 199, 0.45);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        }
+
+        /* Footer */
+        .login-footer {
+            text-align: center;
+            margin-top: 1.75rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .footer-note {
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .footer-note i {
+            color: #10b981;
+            margin-right: 0.25rem;
+        }
+
+        .system-pill {
+            display: inline-block;
+            margin-top: 0.5rem;
+            padding: 0.2rem 0.6rem;
+            background: rgba(2, 132, 199, 0.08);
+            border: 1px solid rgba(2, 132, 199, 0.2);
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="brand-badge-icon">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+                <h1 class="brand-title">Control de Pesos <span>Camposol</span></h1>
+                <p class="brand-subtitle">Aseguramiento de Calidad & SPC | Planta de Empaque</p>
+            </div>
+
+            {% if error %}
+            <div class="login-alert" role="alert">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span>{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <form method="POST" action="/login">
+                <input type="hidden" name="next" value="{{ next or '/' }}">
+
+                <div class="form-group">
+                    <label for="username" class="form-label">Usuario</label>
+                    <div class="input-group">
+                        <i class="fa-solid fa-user input-icon"></i>
+                        <input type="text" id="username" name="username" class="form-input" placeholder="Ingresa tu usuario..." required autofocus autocomplete="username">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">Contraseña</label>
+                    <div class="input-group">
+                        <i class="fa-solid fa-lock input-icon"></i>
+                        <input type="password" id="password" name="password" class="form-input" placeholder="Ingresa tu contraseña..." required autocomplete="current-password">
+                        <button type="button" class="btn-toggle-pwd" id="btn-toggle-pwd" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+                            <i class="fa-solid fa-eye" id="eye-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit" id="btn-submit">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    <span>Ingresar al Sistema</span>
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <p class="footer-note">
+                    <i class="fa-solid fa-shield-halved"></i> Acceso restringido para personal autorizado de Calidad
+                </p>
+                <div class="system-pill">
+                    Camposol S.A. &copy; 2026
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const btnTogglePwd = document.getElementById('btn-toggle-pwd');
+        const pwdInput = document.getElementById('password');
+        const eyeIcon = document.getElementById('eye-icon');
+
+        btnTogglePwd.addEventListener('click', () => {
+            const isPassword = pwdInput.type === 'password';
+            pwdInput.type = isPassword ? 'text' : 'password';
+            eyeIcon.className = isPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+        });
+    </script>
+</body>
+</html>

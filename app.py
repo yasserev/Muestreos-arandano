@@ -1,13 +1,54 @@
 import os
 import io
 import csv
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for, flash
 import data_engine
 import chat_engine
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+app.secret_key = os.environ.get("SECRET_KEY", "camposol_control_pesos_session_secret_2026")
+
+@app.before_request
+def check_authentication():
+    public_endpoints = {"login", "static"}
+    if request.endpoint and request.endpoint in public_endpoints:
+        return
+
+    if request.path.startswith("/static/"):
+        return
+
+    if "user" not in session:
+        if request.path.startswith("/api/"):
+            return jsonify({"status": "error", "message": "Sesión expirada o no autenticado"}), 401
+        return redirect(url_for("login", next=request.path))
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if "user" in session:
+        return redirect(url_for("index"))
+
+    error_msg = None
+    next_page = request.args.get("next") or request.form.get("next") or url_for("index")
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        success, res = data_engine.verify_user_credentials(username, password)
+        if success:
+            session["user"] = res
+            return redirect(next_page)
+        else:
+            error_msg = res
+
+    return render_template("login.html", error=error_msg, next=next_page)
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    return redirect(url_for("login"))
 
 def extract_filters():
     return {
@@ -107,6 +148,15 @@ def get_technology_evolution():
         technology = request.args.get("technology", "").strip() or None
         time_unit = request.args.get("time_unit", "day").strip().lower()
         data = data_engine.get_technology_evolution(filters, technology=technology, time_unit=time_unit)
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/production_technology")
+def get_production_technology():
+    try:
+        filters = extract_filters()
+        data = data_engine.get_production_technology_distribution(filters)
         return jsonify({"status": "success", "data": data})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

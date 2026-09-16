@@ -13,7 +13,7 @@
     <!-- Apache ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/css/dashboard.css?v=presentation">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=auth_v1">
 </head>
 <body>
     <div class="app-container">
@@ -34,14 +34,14 @@
             </div>
 
             <div class="nav-actions">
-                <button class="btn btn-secondary" id="btn-toggle-presentation" title="Activar modo presentación enfocado en tecnologías">
-                    <i class="fa-solid fa-chalkboard-user"></i> <span id="btn-presentation-text">Presentación</span>
+                <button class="btn btn-secondary btn-icon" id="btn-toggle-presentation" title="Modo presentación enfocado en tecnologías">
+                    <i class="fa-solid fa-chalkboard-user"></i>
                 </button>
-                <button class="btn btn-secondary" id="btn-toggle-filters" title="Ocultar o mostrar panel de filtros">
-                    <i class="fa-solid fa-sliders"></i> <span id="btn-toggle-filters-text">Ocultar Filtros</span>
+                <button class="btn btn-secondary btn-icon" id="btn-toggle-filters" title="Ocultar o mostrar panel de filtros">
+                    <i class="fa-solid fa-sliders"></i>
                 </button>
-                <button class="btn btn-secondary" id="btn-open-guide" title="Ver guía de interpretación de gráficos">
-                    <i class="fa-solid fa-circle-question"></i> Guía de Gráficos
+                <button class="btn btn-secondary btn-icon" id="btn-open-guide" title="Guía de interpretación de gráficos">
+                    <i class="fa-solid fa-circle-question"></i>
                 </button>
                 <div class="status-pill" id="db-status-pill">
                     <span class="pulse-dot"></span>
@@ -50,9 +50,20 @@
                 <button class="btn btn-secondary btn-icon" id="btn-theme-toggle" title="Alternar tema oscuro / claro">
                     <i class="fa-solid fa-moon" id="theme-icon"></i>
                 </button>
-                <button class="btn btn-secondary" id="btn-export-csv" title="Descargar datos filtrados en CSV">
-                    <i class="fa-solid fa-file-arrow-down"></i> Exportar CSV
+                <button class="btn btn-secondary btn-icon" id="btn-export-csv" title="Descargar datos filtrados en CSV">
+                    <i class="fa-solid fa-file-arrow-down"></i>
                 </button>
+                <!-- User Profile & Logout -->
+                <div class="user-session-wrapper">
+                    <span class="user-session-badge" title="Usuario conectado">
+                        <i class="fa-solid fa-circle-user"></i>
+                        <span>{{ session.user.nombre if session.user else 'Usuario' }}</span>
+                    </span>
+                    <a href="/logout" class="btn btn-secondary btn-logout" id="btn-logout" title="Cerrar sesión">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                        <span>Salir</span>
+                    </a>
+                </div>
             </div>
         </header>
 
@@ -367,6 +378,40 @@
                     </div>
                     <div class="panel-body">
                         <div id="chart-tech-evolution" class="chart-container-large"></div>
+                    </div>
+                </section>
+
+                <!-- 2.1 Distribución de Producción Total por Tecnología (Gráfico de Torta) -->
+                <section class="chart-panel hero-panel" id="panel-production-technology">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon"><i class="fa-solid fa-chart-pie"></i></div>
+                            <div>
+                                <h3 class="panel-title">Distribución de Producción por Tecnología (Kg)</h3>
+                                <p class="panel-subtitle">Distribución y volumen total de fruta procesada en kilos (Hoja PRODUCCIÓN) por tecnología de empaque</p>
+                            </div>
+                        </div>
+                        <div class="panel-header-actions">
+                            <div class="prod-kpi-summary-badges">
+                                <span class="prod-badge-stat">
+                                    <i class="fa-solid fa-weight-hanging"></i> Total: <strong id="prod-total-kilos">0 kg</strong>
+                                </span>
+                                <span class="prod-badge-stat">
+                                    <i class="fa-solid fa-boxes-stacked"></i> Registros: <strong id="prod-total-registros">0</strong>
+                                </span>
+                            </div>
+                            <div class="btn-group-pill" id="prod-chart-view-group">
+                                <button type="button" class="btn-pill active" data-type="pie" id="btn-prod-view-pie" title="Gráfico de Torta">
+                                    <i class="fa-solid fa-chart-pie"></i> Torta
+                                </button>
+                                <button type="button" class="btn-pill" data-type="donut" id="btn-prod-view-donut" title="Gráfico de Dona">
+                                    <i class="fa-solid fa-circle-notch"></i> Dona
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="chart-production-technology" class="chart-container-large" style="min-height: 440px;"></div>
                     </div>
                 </section>
 
@@ -719,6 +764,21 @@
                             <p><b>¿Cómo interpretarlo?</b> Permite auditar si los ajustes de pesaje en balanza a lo largo de los días lograron corregir desviaciones y mantener el empaque dentro de la banda verde de calidad.</p>
                         </div>
                     </div>
+
+                    <!-- 8. Distribución de Producción por Tecnología -->
+                    <div class="guide-card">
+                        <div class="guide-card-header">
+                            <div class="guide-num">8</div>
+                            <div>
+                                <h5>Distribución de Producción por Tecnología</h5>
+                                <span class="guide-tag">Volumen Real en Kilos (Hoja PRODUCCIÓN)</span>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p><b>¿Qué muestra?</b> Gráfico de torta/dona interactivo con la distribución del volumen real procesado en kilos (columna AB) según cada tecnología de empaque (columna AC).</p>
+                            <p><b>¿Cómo interpretarlo?</b> Identifica qué tecnologías concentran la mayor participación del volumen total de fruta empacada en planta durante la campaña o el período filtrado.</p>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary" id="btn-guide-modal-dismiss">Entendido</button>
@@ -807,6 +867,6 @@
     </aside>
 
     <!-- Custom Script -->
-    <script src="/static/js/dashboard.js?v=presentation_white_pill"></script>
+    <script src="/static/js/dashboard.js?v=prod_pie_v2"></script>
 </body>
 </html>

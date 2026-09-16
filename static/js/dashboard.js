@@ -30,6 +30,8 @@ const AppState = {
     techEvolutionUnit: 'day',
     techEvolutionSelectedTech: null,
     techEvolutionData: null,
+    prodChartViewMode: 'pie',
+    prodData: null,
     presentationMode: false,
     charts: {
         scatter: null,
@@ -38,7 +40,8 @@ const AppState = {
         boxplot: null,
         compliance: null,
         technology: null,
-        techEvolution: null
+        techEvolution: null,
+        productionTechnology: null
     }
 };
 
@@ -127,7 +130,13 @@ const elements = {
     btnUnitDay: document.getElementById('btn-unit-day'),
     btnUnitWeek: document.getElementById('btn-unit-week'),
     btnUnitMonth: document.getElementById('btn-unit-month'),
-    techEvolutionUnitBtns: document.querySelectorAll('#tech-evolution-unit-group .btn-pill')
+    techEvolutionUnitBtns: document.querySelectorAll('#tech-evolution-unit-group .btn-pill'),
+    // Production Technology Chart Elements
+    prodTotalKilos: document.getElementById('prod-total-kilos'),
+    prodTotalRegistros: document.getElementById('prod-total-registros'),
+    btnProdViewPie: document.getElementById('btn-prod-view-pie'),
+    btnProdViewDonut: document.getElementById('btn-prod-view-donut'),
+    prodChartViewBtns: document.querySelectorAll('#prod-chart-view-group .btn-pill')
 };
 
 // Initialize Application
@@ -173,8 +182,8 @@ function setSidebarCollapsed(collapsed, animate = true) {
     elements.mainLayout.classList.toggle('filters-collapsed', collapsed);
     localStorage.setItem('filters_collapsed', collapsed ? 'true' : 'false');
     
-    if (elements.btnToggleFiltersText) {
-        elements.btnToggleFiltersText.textContent = collapsed ? 'Mostrar Filtros' : 'Ocultar Filtros';
+    if (elements.btnToggleFilters) {
+        elements.btnToggleFilters.title = collapsed ? 'Mostrar panel de filtros' : 'Ocultar panel de filtros';
     }
     const icon = elements.btnToggleFilters ? elements.btnToggleFilters.querySelector('i') : null;
     if (icon) {
@@ -198,13 +207,11 @@ function resizeAllCharts() {
         Object.values(AppState.charts).forEach(c => {
             if (c) c.resize();
         });
-        if (typeof updateTechCenterBadges === 'function') updateTechCenterBadges();
     }, 100);
     setTimeout(() => {
         Object.values(AppState.charts).forEach(c => {
             if (c) c.resize();
         });
-        if (typeof updateTechCenterBadges === 'function') updateTechCenterBadges();
     }, 320);
 }
 
@@ -217,7 +224,8 @@ function initCharts() {
         { key: 'boxplot', elId: 'chart-boxplot' },
         { key: 'compliance', elId: 'chart-compliance' },
         { key: 'technology', elId: 'chart-technology' },
-        { key: 'techEvolution', elId: 'chart-tech-evolution' }
+        { key: 'techEvolution', elId: 'chart-tech-evolution' },
+        { key: 'productionTechnology', elId: 'chart-production-technology' }
     ];
 
     chartConfigs.forEach(cfg => {
@@ -270,11 +278,11 @@ function setupEventListeners() {
             elements.btnTogglePresentation.classList.toggle('active', AppState.presentationMode);
 
             if (AppState.presentationMode) {
-                elements.btnTogglePresentation.innerHTML = '<i class="fa-solid fa-compress"></i> <span>Salir Presentación</span>';
-                elements.btnTogglePresentation.title = 'Salir del modo presentación y restaurar todos los paneles';
+                elements.btnTogglePresentation.innerHTML = '<i class="fa-solid fa-compress"></i>';
+                elements.btnTogglePresentation.title = 'Salir del modo presentación y restaurar paneles';
             } else {
-                elements.btnTogglePresentation.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> <span>Presentación</span>';
-                elements.btnTogglePresentation.title = 'Activar modo presentación enfocado en tecnologías';
+                elements.btnTogglePresentation.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i>';
+                elements.btnTogglePresentation.title = 'Modo presentación enfocado en tecnologías';
             }
 
             resizeAllCharts();
@@ -292,6 +300,22 @@ function setupEventListeners() {
         syncFiltersFromUI();
         AppState.tablePagination.page = 1;
         fetchDashboardData();
+    });
+
+    // Reactive auto-update on dropdown filter selection
+    [
+        elements.selectTurno,
+        elements.selectLinea,
+        elements.selectFormato,
+        elements.selectVariedad,
+        elements.selectTecnologia,
+        elements.selectCliente
+    ].forEach(sel => {
+        sel?.addEventListener('change', () => {
+            syncFiltersFromUI();
+            AppState.tablePagination.page = 1;
+            fetchDashboardData();
+        });
     });
 
     // Reset filters
@@ -377,6 +401,20 @@ function setupEventListeners() {
             fetchTechnologyEvolution();
         });
     });
+
+    // Production Technology View Mode (Pie vs Donut)
+    elements.btnProdViewPie?.addEventListener('click', () => setProdChartViewMode('pie'));
+    elements.btnProdViewDonut?.addEventListener('click', () => setProdChartViewMode('donut'));
+}
+
+function setProdChartViewMode(mode) {
+    AppState.prodChartViewMode = mode;
+    elements.prodChartViewBtns?.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.type === mode);
+    });
+    if (AppState.prodData) {
+        renderProductionTechnologyChart(AppState.prodData);
+    }
 }
 
 function applyDatePreset(preset) {
@@ -482,6 +520,7 @@ async function fetchDashboardData() {
             fetchLinesComparison(query),
             fetchTechnologyComparison(query),
             fetchTechnologiesList(query),
+            fetchProductionTechnology(query),
             fetchSamplesTable()
         ]);
         await fetchTechnologyEvolution();
@@ -1425,101 +1464,68 @@ function renderTechnologyChart() {
                         return item.status === 'under' ? '#ef4444' : (item.status === 'over' ? '#f59e0b' : '#10b981');
                     }
                 }
+            },
+            {
+                // 5th invisible series: renders deviation badge INSIDE the bar.
+                // Transparent bars, but ECharts labels with position:'inside' always
+                // render on top of the bar fill, solving z-order issues entirely.
+                name: '5. Desviación (interno)',
+                type: 'bar',
+                barMaxWidth: 24,
+                stack: null,
+                data: series4Data.map((d, i) => {
+                    const item = techList[i];
+                    const val = typeof d === 'object' ? d.value : d;
+                    const isDark = AppState.theme === 'dark';
+                    return {
+                        value: val,
+                        itemStyle: { color: 'transparent', borderColor: 'transparent' },
+                        label: {
+                            color: isDark ? '#f8fafc' : '#0f172a'
+                        }
+                    };
+                }),
+                label: {
+                    show: true,
+                    position: 'inside',
+                    color: AppState.theme === 'dark' ? '#f8fafc' : '#0f172a',
+                    fontSize: 9.5,
+                    fontWeight: 'bold',
+                    formatter: function(p) {
+                        const item = techList[p.dataIndex];
+                        if (!item) return '';
+                        const txt = item.status === 'in_range'
+                            ? '✓ OK'
+                            : (item.diff_pct > 0 ? `+${item.diff_pct.toFixed(1)}%` : `${item.diff_pct.toFixed(1)}%`);
+                        return `{badgeText|${txt}}`;
+                    },
+                    rich: {
+                        badgeText: {
+                            color: AppState.theme === 'dark' ? '#f8fafc' : '#0f172a',
+                            fontSize: 9.5,
+                            fontWeight: 'bold'
+                        }
+                    },
+                    backgroundColor: AppState.theme === 'dark' ? 'rgba(255, 255, 255, 0.09)' : 'rgba(100, 116, 139, 0.14)',
+                    borderColor: AppState.theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(100, 116, 139, 0.25)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    padding: [3, 5],
+                    textBorderWidth: 0,
+                    textBorderColor: 'transparent'
+                },
+                tooltip: { show: false },
+                silent: true
             }
         ]
     };
 
     chartTech.setOption(option, true);
-    setTimeout(updateTechCenterBadges, 50);
 }
 
-// Draw centered deviation label inside the body of the 4th bar
-function updateTechCenterBadges() {
-    const chart = AppState.charts.technology;
-    if (!chart || !AppState.techData || AppState.techData.length === 0) return;
-    const model = chart.getModel();
-    if (!model) return;
-    const realSeries = model.getSeriesByIndex(3);
-    if (!realSeries) return;
-    const data = realSeries.getData();
-    if (!data || data.count() === 0) return;
-
-    const opt = chart.getOption();
-    const yAxis = opt.yAxis && opt.yAxis[0] ? opt.yAxis[0] : {};
-    const yMin = typeof yAxis.min === 'number' ? yAxis.min : (AppState.techChartMode === 'dev' ? -5 : 95);
-
-    const elements = [];
-    const mode = AppState.techChartMode;
-
-    for (let i = 0; i < data.count(); i++) {
-        const layout = data.getItemLayout(i);
-        if (!layout) continue;
-
-        const item = AppState.techData[i];
-        if (!item) continue;
-
-        const val = mode === 'dev' ? item.dev_real : item.pct_real;
-        const topPixel = chart.convertToPixel({ seriesIndex: 3 }, [i, val]);
-        const bottomPixel = chart.convertToPixel({ seriesIndex: 3 }, [i, yMin]);
-        if (!topPixel || !bottomPixel) continue;
-
-        const centerX = layout.x + layout.width / 2;
-        // Vertically center inside the colored bar body
-        const centerY = (topPixel[1] + bottomPixel[1]) / 2;
-
-        const diffVal = item.diff_pct;
-        const badgeText = item.status === 'in_range'
-            ? '✓ OK'
-            : (diffVal > 0 ? `+${diffVal.toFixed(1)}%` : `${diffVal.toFixed(1)}%`);
-
-        const textColor = item.status === 'under' ? '#dc2626' : (item.status === 'over' ? '#d97706' : '#059669');
-        const badgeWidth = Math.max(30, Math.min(layout.width + 6, 36));
-
-        elements.push({
-            type: 'group',
-            id: `tech_center_badge_${i}`,
-            left: centerX - badgeWidth / 2,
-            top: centerY - 9,
-            width: badgeWidth,
-            height: 18,
-            z: 99,
-            silent: true,
-            children: [
-                {
-                    type: 'rect',
-                    shape: {
-                        width: badgeWidth,
-                        height: 18,
-                        r: 4
-                    },
-                    style: {
-                        fill: '#ffffff',
-                        stroke: 'rgba(0, 0, 0, 0.2)',
-                        lineWidth: 1,
-                        shadowBlur: 4,
-                        shadowColor: 'rgba(0, 0, 0, 0.2)',
-                        shadowOffsetY: 1
-                    }
-                },
-                {
-                    type: 'text',
-                    style: {
-                        text: badgeText,
-                        x: badgeWidth / 2,
-                        y: 9,
-                        fill: textColor,
-                        fontSize: 9.5,
-                        fontWeight: 'bold',
-                        align: 'center',
-                        verticalAlign: 'middle'
-                    }
-                }
-            ]
-        });
-    }
-
-    chart.setOption({ graphic: elements }, { replaceMerge: ['graphic'] });
-}
+// Deviation badges are now rendered via the 5th transparent bar series (position:'inside').
+// This stub is kept for backward compatibility with any lingering references.
+function updateTechCenterBadges() {}
 
 // 4.6 Single Technology Temporal Evolution Chart
 async function fetchTechnologiesList(query = '') {
@@ -1772,6 +1778,224 @@ function renderTechEvolutionChart(data) {
                             }
                         }
                     ]
+                }
+            }
+        ]
+    };
+
+    chart.setOption(option, true);
+}
+
+// 4.7 Distribución de Producción por Tecnología (Gráfico de Torta / Dona)
+async function fetchProductionTechnology(query = '') {
+    const chart = AppState.charts.productionTechnology;
+    if (!chart) return;
+
+    try {
+        const url = query ? `/api/production_technology?${query}` : '/api/production_technology';
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json.status !== 'success') return;
+
+        AppState.prodData = json.data;
+
+        // Update badge stats in panel header
+        if (elements.prodTotalKilos) {
+            const kg = json.data.total_kilos || 0;
+            elements.prodTotalKilos.textContent = `${Number(kg).toLocaleString('es-PE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`;
+        }
+        if (elements.prodTotalRegistros) {
+            elements.prodTotalRegistros.textContent = Number(json.data.total_registros || 0).toLocaleString('es-PE');
+        }
+
+        renderProductionTechnologyChart(json.data);
+    } catch (err) {
+        console.error('Error fetching production technology distribution:', err);
+    }
+}
+
+function renderProductionTechnologyChart(data) {
+    const chart = AppState.charts.productionTechnology;
+    if (!chart) return;
+
+    const colors = getChartColors();
+    const isDark = AppState.theme === 'dark';
+    const isDonut = AppState.prodChartViewMode === 'donut';
+
+    const items = data.items || [];
+    const totalKilos = data.total_kilos || 0;
+
+    if (items.length === 0) {
+        chart.setOption({
+            title: {
+                text: 'No se encontraron datos de producción para los filtros seleccionados',
+                left: 'center',
+                top: 'middle',
+                textStyle: { color: colors.text, fontSize: 13, fontWeight: 'normal' }
+            },
+            series: []
+        }, true);
+        return;
+    }
+
+    // Technology color palette
+    const techColorPalette = {
+        'AC 0.1%': '#0ea5e9',
+        'BPAM': '#10b981',
+        'AC 0.3%': '#8b5cf6',
+        'AM': '#f59e0b',
+        'AC DRISCOLL': '#ec4899',
+        'AÉREO': '#06b6d4',
+        'A\ufffdREO': '#06b6d4'
+    };
+    const fallbackColors = ['#0ea5e9', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#14b8a6', '#f97316'];
+
+    const seriesData = items.map((item, idx) => {
+        let techName = (item.tecnologia || '').trim();
+        if (techName.includes('REO') || techName.toLowerCase().includes('aereo')) {
+            techName = 'AÉREO';
+        }
+        const color = techColorPalette[techName] || fallbackColors[idx % fallbackColors.length];
+
+        return {
+            name: techName,
+            value: item.kilos,
+            porcentaje: item.porcentaje,
+            registros: item.registros,
+            itemStyle: {
+                color: color,
+                borderRadius: 6,
+                borderColor: isDark ? '#1e293b' : '#ffffff',
+                borderWidth: 2
+            }
+        };
+    });
+
+    const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'item',
+            confine: true,
+            backgroundColor: colors.tooltipBg,
+            borderColor: colors.tooltipBorder,
+            textStyle: { color: colors.tooltipText },
+            extraCssText: 'box-shadow: 0 10px 25px rgba(0,0,0,0.2); border-radius: 8px; z-index: 100;',
+            formatter: function(params) {
+                const d = params.data;
+                const dot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${params.color};margin-right:6px"></span>`;
+                const tn = (d.value / 1000).toFixed(2);
+                return `
+                    <div style="font-size:0.85rem;min-width:250px;line-height:1.4">
+                        <div style="font-weight:700;margin-bottom:4px;color:${colors.title};font-size:0.95rem">
+                            ${dot} ${d.name}
+                        </div>
+                        <hr style="border:none;border-top:1px solid ${colors.splitLine};margin:6px 0">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                            <span>Kilos Producidos:</span>
+                            <b>${Number(d.value).toLocaleString('es-PE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg</b>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                            <span>Toneladas Métricas:</span>
+                            <b>${Number(tn).toLocaleString('es-PE', { minimumFractionDigits: 2 })} Tn</b>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                            <span>Participación:</span>
+                            <b style="color:${params.color}">${d.porcentaje.toFixed(2)}%</b>
+                        </div>
+                        <div style="display:flex;justify-content:space-between">
+                            <span>Registros en Hoja:</span>
+                            <b>${Number(d.registros).toLocaleString('es-PE')}</b>
+                        </div>
+                    </div>
+                `;
+            }
+        },
+        legend: {
+            orient: 'horizontal',
+            bottom: '2%',
+            left: 'center',
+            textStyle: {
+                color: colors.text,
+                fontSize: 11
+            },
+            formatter: function(name) {
+                const found = seriesData.find(s => s.name === name);
+                if (!found) return name;
+                return `${name} (${found.porcentaje.toFixed(1)}%)`;
+            }
+        },
+        graphic: isDonut ? [
+            {
+                type: 'text',
+                left: 'center',
+                top: '43%',
+                style: {
+                    text: totalKilos >= 1000000 
+                        ? `${(totalKilos / 1000).toLocaleString('es-PE', { maximumFractionDigits: 0 })}k kg` 
+                        : `${totalKilos.toLocaleString('es-PE', { maximumFractionDigits: 0 })} kg`,
+                    fill: colors.title,
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    textAlign: 'center'
+                }
+            },
+            {
+                type: 'text',
+                left: 'center',
+                top: '52%',
+                style: {
+                    text: 'Total Kilos',
+                    fill: colors.text,
+                    fontSize: 11,
+                    textAlign: 'center'
+                }
+            }
+        ] : [],
+        series: [
+            {
+                name: 'Distribución de Kilos',
+                type: 'pie',
+                radius: isDonut ? ['42%', '72%'] : ['0%', '72%'],
+                center: ['50%', '47%'],
+                avoidLabelOverlap: true,
+                padAngle: isDonut ? 3 : 1,
+                data: seriesData,
+                label: {
+                    show: true,
+                    position: 'outside',
+                    formatter: function(params) {
+                        return `{b|${params.name}}\n{d|${params.percent.toFixed(1)}%}`;
+                    },
+                    rich: {
+                        b: {
+                            fontSize: 11,
+                            fontWeight: '600',
+                            color: colors.title
+                        },
+                        d: {
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                            color: colors.text
+                        }
+                    }
+                },
+                labelLine: {
+                    show: true,
+                    length: 15,
+                    length2: 12,
+                    smooth: true,
+                    lineStyle: {
+                        color: colors.splitLine || '#94a3b8'
+                    }
+                },
+                emphasis: {
+                    scale: true,
+                    scaleSize: 8,
+                    itemStyle: {
+                        shadowBlur: 15,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.3)'
+                    }
                 }
             }
         ]

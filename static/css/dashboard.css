@@ -249,6 +249,11 @@ body {
     height: 38px;
     padding: 0;
     border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.95rem;
 }
 
 .btn-sm {
@@ -2024,7 +2029,7 @@ body.presentation-mode .kpis-section {
     display: none !important;
 }
 
-body.presentation-mode .chart-panel:not(#panel-technology):not(#panel-tech-evolution) {
+body.presentation-mode .chart-panel:not(#panel-technology):not(#panel-tech-evolution):not(#panel-production-technology) {
     display: none !important;
 }
 
@@ -2036,17 +2041,111 @@ body.presentation-mode .table-panel {
     display: none !important;
 }
 
-/* Estilos de realce para los 2 paneles en modo presentación */
+/* Estilos de realce para los paneles en modo presentación */
 body.presentation-mode #panel-technology,
-body.presentation-mode #panel-tech-evolution {
+body.presentation-mode #panel-tech-evolution,
+body.presentation-mode #panel-production-technology {
     margin-bottom: 2rem;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     border-color: rgba(2, 132, 199, 0.2);
 }
 
 body.presentation-mode #panel-technology .chart-container-large,
-body.presentation-mode #panel-tech-evolution .chart-container-large {
+body.presentation-mode #panel-tech-evolution .chart-container-large,
+body.presentation-mode #panel-production-technology .chart-container-large {
     height: 520px;
 }
+
+/* Badges de resumen en cabecera de panel de producción */
+.prod-kpi-summary-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.prod-badge-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    background: rgba(14, 165, 233, 0.08);
+    border: 1px solid rgba(14, 165, 233, 0.2);
+    border-radius: var(--radius-sm, 6px);
+    font-size: 0.78rem;
+    color: var(--text-secondary, #475569);
+    font-weight: 500;
+}
+
+.prod-badge-stat strong {
+    color: #0284c7;
+    font-weight: 700;
+    font-family: 'Inter', var(--font-main, sans-serif);
+}
+
+[data-theme="dark"] .prod-badge-stat {
+    background: rgba(14, 165, 233, 0.12);
+    border-color: rgba(56, 189, 248, 0.25);
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .prod-badge-stat strong {
+    color: #38bdf8;
+}
+
+/* User Session Badge & Logout */
+.user-session-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 0.4rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--border-subtle);
+}
+
+.user-session-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.42rem 0.85rem;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.user-session-badge i {
+    color: var(--accent-primary);
+    font-size: 1.05rem;
+}
+
+.btn-logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.42rem 0.85rem;
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.08) !important;
+    border: 1px solid rgba(239, 68, 68, 0.25) !important;
+    text-decoration: none !important;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-logout:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+    transform: translateY(-1px);
+}
+
+
 
 

@@ -15,12 +15,35 @@ import json
 import re
 import numpy as np
 import os
+try:
+    from openai import OpenAI, RateLimitError, APIError
+    HAS_OPENAI_SDK = True
+except ImportError:
+    HAS_OPENAI_SDK = False
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data_pesos.db')
-AGENTROUTER_API_KEY = "sk-kYMTsq1NSZNdMiOhmsfOvTWvxR7kPFwFWSXqkc0Vv2FWKRPX"
-AGENTROUTER_BASE_URL = "https://agentrouter.org/v1/chat/completions"
-OPENCODE_API_KEY = "sk-NUGwhfJ7Bxv5jwHW3HelAmS9OLNqMCCSItBBHXAKsQKkbGjmt59Etyn6oXQKEdt1"
-OPENCODE_BASE_URL = "https://opencode.ai/zen/v1/chat/completions"
+
+def _load_env_key(key_name, default=""):
+    if os.environ.get(key_name):
+        return os.environ[key_name].strip()
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith(f"{key_name}="):
+                        return line.split('=', 1)[1].strip().strip('"').strip("'")
+        except Exception:
+            pass
+    return default
+
+OPENAI_API_KEY = _load_env_key("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1/chat/completions")
+AGENTROUTER_API_KEY = _load_env_key("AGENTROUTER_API_KEY", "")
+AGENTROUTER_BASE_URL = os.environ.get("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1/chat/completions")
+OPENCODE_API_KEY = _load_env_key("OPENCODE_API_KEY", "")
+OPENCODE_BASE_URL = os.environ.get("OPENCODE_BASE_URL", "https://opencode.ai/zen/v1/chat/completions")
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -237,6 +260,78 @@ def query_specific_data(user_message):
 
     conn.close()
     return details
+
+def call_openai_api(messages, model="gpt-4o-mini"):
+    """
+    Attempt calling official OpenAI API using the official OpenAI Python SDK.
+    Returns (success: bool, reply_or_error: str, model_used: str, error_code: str).
+    """
+    if not OPENAI_API_KEY or not OPENAI_API_KEY.startswith("sk-"):
+        return False, "OpenAI API Key no configurada", model, "no_key"
+
+    if HAS_OPENAI_SDK:
+        try:
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            completion = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=1200,
+                temperature=0.2
+            )
+            if completion.choices and len(completion.choices) > 0:
+                reply = completion.choices[0].message.content
+                return True, reply, model, ""
+            return False, "Respuesta vacía de OpenAI", model, "empty_response"
+        except RateLimitError as e:
+            code = getattr(e, 'code', '') or 'rate_limit'
+            msg = getattr(e, 'message', str(e))
+            return False, f"OpenAI RateLimitError ({code}): {msg}", model, code
+        except APIError as e:
+            code = getattr(e, 'code', '') or 'api_error'
+            msg = getattr(e, 'message', str(e))
+            return False, f"OpenAI APIError ({code}): {msg}", model, code
+        except Exception as e:
+            return False, f"Error OpenAI SDK: {str(e)}", model, "sdk_error"
+
+    # Fallback to direct HTTP if SDK is unavailable
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": 1200,
+        "temperature": 0.2
+    }
+
+    req = urllib.request.Request(
+        OPENAI_BASE_URL,
+        data=json.dumps(payload).encode('utf-8'),
+        headers=headers
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            if "choices" in data and len(data["choices"]) > 0:
+                reply = data["choices"][0]["message"]["content"]
+                return True, reply, model, ""
+            return False, "Respuesta vacía de OpenAI", model, "empty_response"
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode('utf-8', errors='ignore')
+        err_code = ""
+        err_msg = err_body
+        try:
+            err_json = json.loads(err_body)
+            err_msg = err_json.get("error", {}).get("message", err_body)
+            err_code = err_json.get("error", {}).get("code", "")
+        except Exception:
+            pass
+        return False, f"OpenAI HTTP {e.code}: {err_msg}", model, err_code
+    except Exception as e:
+        return False, f"Error de conexión con OpenAI: {str(e)}", model, "network_error"
 
 def call_agentrouter_api(messages):
     """
@@ -500,7 +595,16 @@ Instrucciones:
 
     messages.append({"role": "user", "content": user_message})
 
-    # 1. Try calling AgentRouter API first (with Claude Opus / DeepSeek / GPT)
+    # 1. Try calling official OpenAI API first (user's key: gpt-4o-mini)
+    oa_success, oa_reply, oa_model, oa_err_code = call_openai_api(messages, model="gpt-4o-mini")
+    if oa_success:
+        return {
+            "status": "success",
+            "source": f"openai_{oa_model}",
+            "reply": oa_reply
+        }
+
+    # 2. Try calling AgentRouter API (Claude Opus / DeepSeek / GPT)
     ar_success, ar_reply, ar_model = call_agentrouter_api(messages)
     if ar_success:
         return {
@@ -509,7 +613,7 @@ Instrucciones:
             "reply": ar_reply
         }
 
-    # 2. Try calling OpenCode Zen API
+    # 3. Try calling OpenCode Zen API
     oc_success, oc_reply_or_err = call_opencode_api(messages)
     if oc_success:
         return {
@@ -518,10 +622,20 @@ Instrucciones:
             "reply": oc_reply_or_err
         }
 
-    # 3. Fallback to our local SPC statistical engine (100% grounded in the Excel data)
+    # 4. Fallback to our local SPC statistical engine (100% grounded in the Excel data)
     local_reply = generate_local_response(user_message, stats_ctx, specific_data)
 
-    note = "\n\n---\n*ℹ️ Consulta resuelta con el motor analítico de datos (Excel). Ambas API Keys (AgentRouter y OpenCode) están integradas en el sistema. Actualmente AgentRouter reporta cuota diaria temporalmente agotada en su pool global (HTTP 402) y OpenCode reporta balance agotado. Cuando la cuota diaria de AgentRouter se reinicie o se recargue saldo, el chat utilizará automáticamente el modelo en la nube.*"
+    if oa_err_code == "credit_balance_exhausted":
+        note = (
+            "\n\n---\n"
+            "*ℹ️ Tu API Key de OpenAI está configurada e integrada en el sistema. "
+            "Actualmente OpenAI reporta: **'You have no credits remaining'** (saldo agotado en la cuenta de OpenAI). "
+            "Para que GPT-4o-mini responda directamente, añade créditos en tu cuenta en "
+            "[platform.openai.com/settings/organization/billing](https://platform.openai.com/settings/organization/billing/). "
+            "Mientras tanto, el chat opera automáticamente con el motor analítico local sobre los datos reales del Excel.*"
+        )
+    else:
+        note = f"\n\n---\n*ℹ️ Consulta resuelta con el motor analítico de datos (Excel). (OpenAI status: {oa_reply})*"
 
     return {
         "status": "success",
