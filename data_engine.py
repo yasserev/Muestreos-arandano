@@ -366,6 +366,30 @@ def verify_user_credentials(username, password):
     conn.close()
     return False, "Usuario o contraseña incorrectos."
 
+def create_or_update_user(usuario, password, nombre, rol='analista', activo=1):
+    """
+    Creates or updates a user in the SQL 'usuarios' table.
+    """
+    init_users_table()
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    cur = conn.cursor()
+    import datetime
+    from werkzeug.security import generate_password_hash
+    now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    pwd_hash = generate_password_hash(password)
+    cur.execute('''
+        INSERT INTO usuarios (usuario, password, nombre, rol, activo, creado_el)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(usuario) DO UPDATE SET
+            password = excluded.password,
+            nombre = excluded.nombre,
+            rol = excluded.rol,
+            activo = excluded.activo
+    ''', (usuario.strip(), pwd_hash, nombre.strip(), rol, activo, now_str))
+    conn.commit()
+    conn.close()
+    return True
+
 def get_connection():
     sync_database_if_needed()
     init_users_table()
