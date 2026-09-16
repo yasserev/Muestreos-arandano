@@ -1,7 +1,21 @@
+# Excel data files (too large for git / contain sensitive production data)
 *.xlsx
 *.xls
-*.db
+
+# Local development database backups
+control_pesos.db
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+
+# Environment secrets (never commit API keys)
 .env
 
+# OS/Editor
+.DS_Store
+Thumbs.db
+
+# NOTE: data_pesos.db is intentionally tracked so Vercel can serve the bundled database.
+# The database is copied to /tmp at runtime for write operations (login, user hash upgrade).

@@ -1,11 +1,39 @@
 import os
+import shutil
 import sqlite3
 import pandas as pd
 import numpy as np
 from scipy import stats
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data_pesos.db")
-EXCEL_PATH = os.path.join(os.path.dirname(__file__), "Data pesos.xlsx")
+# ---------------------------------------------------------------------------
+# Path resolution: Vercel serverless has a read-only filesystem except /tmp.
+# When running on Vercel (or any read-only environment), we copy the bundled
+# data_pesos.db to /tmp at startup and use that as the writable database.
+# ---------------------------------------------------------------------------
+_PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+_BUNDLED_DB = os.path.join(_PROJECT_DIR, "data_pesos.db")
+_TMP_DB = os.path.join("/tmp", "data_pesos.db")
+
+def _get_writable_db_path():
+    """Return a writable path for the SQLite database.
+    On Vercel / Lambda the project dir is read-only; use /tmp instead."""
+    project_db = _BUNDLED_DB
+    # Check if we can write to the project directory
+    try:
+        test_file = os.path.join(_PROJECT_DIR, ".write_test")
+        with open(test_file, "w") as f:
+            f.write("ok")
+        os.remove(test_file)
+        return project_db  # local dev: use project directory
+    except OSError:
+        # Read-only filesystem (Vercel / serverless). Use /tmp.
+        if not os.path.exists(_TMP_DB):
+            if os.path.exists(project_db):
+                shutil.copyfile(project_db, _TMP_DB)
+        return _TMP_DB
+
+DB_PATH = _get_writable_db_path()
+EXCEL_PATH = os.path.join(_PROJECT_DIR, "Data pesos.xlsx")
 
 T_COLS = [f"t{i}" for i in range(1, 49)]
 
