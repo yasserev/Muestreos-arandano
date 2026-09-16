@@ -3,7 +3,6 @@ import io
 import csv
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for, flash
 import data_engine
-import chat_engine
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -206,20 +205,6 @@ def export_csv():
             mimetype="text/csv",
             headers={"Content-Disposition": "attachment;filename=muestreos_filtrados.csv"}
         )
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/api/chat", methods=["POST"])
-def chat():
-    try:
-        payload = request.get_json(silent=True) or {}
-        user_message = payload.get("message", "").strip()
-        history = payload.get("history", [])
-        if not user_message:
-            return jsonify({"status": "error", "message": "El mensaje no puede estar vacío"}), 400
-
-        result = chat_engine.process_chat_query(user_message, history=history)
-        return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
