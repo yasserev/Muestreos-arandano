@@ -37,12 +37,23 @@ EXCEL_PATH = os.path.join(_PROJECT_DIR, "Data pesos.xlsx")
 
 T_COLS = [f"t{i}" for i in range(1, 49)]
 
-def sync_database_if_needed():
-    """Ensure data_pesos.db is created and updated if Excel is newer."""
+def _parse_excel_date(val):
+    if val is None:
+        return None
+    if hasattr(val, 'strftime'):
+        return val.strftime('%Y-%m-%d')
+    if isinstance(val, (int, float)) and 30000 <= val <= 60000:
+        import datetime
+        return (datetime.date(1899, 12, 30) + datetime.timedelta(days=int(val))).strftime('%Y-%m-%d')
+    s = str(val).strip()
+    return s[:10] if s else None
+
+def sync_database_if_needed(force=False):
+    """Ensure data_pesos.db is created and updated if Excel is newer or force=True."""
     if not os.path.exists(EXCEL_PATH):
         return
 
-    needs_rebuild = False
+    needs_rebuild = force
     if not os.path.exists(DB_PATH):
         needs_rebuild = True
     else:
@@ -169,7 +180,7 @@ def sync_database_if_needed():
                     continue
 
                 id_ctrl = f'ctrl_{idx+1}'
-                f = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else (str(r[0])[:10] if r[0] else None)
+                f = _parse_excel_date(r[0])
                 try:
                     sem = int(float(r[1])) if r[1] is not None else None
                 except (ValueError, TypeError):
@@ -264,10 +275,10 @@ def sync_database_if_needed():
                     texto_mat = str(r[3]) if r[3] is not None else None
                     unidad = str(r[4]) if r[4] is not None else None
                     cant = float(r[5]) if (r[5] is not None and not isinstance(r[5], str)) else None
-                    f_ent = r[6].strftime('%Y-%m-%d') if hasattr(r[6], 'strftime') else (str(r[6])[:10] if r[6] else None)
+                    f_ent = _parse_excel_date(r[6])
                     clase_mov = str(r[7]) if r[7] is not None else None
                     lote = str(r[9]) if r[9] is not None else None
-                    f_con = r[10].strftime('%Y-%m-%d') if hasattr(r[10], 'strftime') else (str(r[10])[:10] if r[10] else None)
+                    f_con = _parse_excel_date(r[10])
                     doc_mat = str(r[12]) if r[12] is not None else None
                     viaje = str(r[24]).strip() if (len(r) > 24 and r[24] is not None) else None
                     peso_caja = float(r[26]) if (len(r) > 26 and r[26] is not None and not isinstance(r[26], str)) else None
