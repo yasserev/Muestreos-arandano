@@ -11,17 +11,33 @@ app.secret_key = os.environ.get("SECRET_KEY", "camposol_control_pesos_session_se
 
 @app.before_request
 def check_authentication():
-    public_endpoints = {"login", "static"}
+    public_endpoints = {"login", "static", "favicon"}
     if request.endpoint and request.endpoint in public_endpoints:
         return
 
-    if request.path.startswith("/static/"):
+    if request.path.startswith("/static/") or request.path == "/favicon.ico":
         return
 
     if "user" not in session:
         if request.path.startswith("/api/"):
             return jsonify({"status": "error", "message": "Sesión expirada o no autenticado"}), 401
         return redirect(url_for("login", next=request.path))
+
+@app.route("/favicon.ico")
+def favicon():
+    return Response(status=204)
+
+def safe_jsonify(data):
+    def _clean(val):
+        import math
+        if isinstance(val, float):
+            return 0.0 if (math.isnan(val) or math.isinf(val)) else val
+        elif isinstance(val, dict):
+            return {k: _clean(v) for k, v in val.items()}
+        elif isinstance(val, (list, tuple)):
+            return [_clean(v) for v in val]
+        return val
+    return jsonify({"status": "success", "data": _clean(data)})
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -70,7 +86,7 @@ def index():
 def get_filters():
     try:
         data = data_engine.get_filters()
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -79,7 +95,7 @@ def get_kpis():
     try:
         filters = extract_filters()
         data = data_engine.get_kpis_and_summary(filters)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -89,7 +105,7 @@ def get_scatter():
         filters = extract_filters()
         max_pts = int(request.args.get("max_points", 3500))
         data = data_engine.get_scatter_data(filters, max_points=max_pts)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -99,7 +115,7 @@ def get_distribution():
         filters = extract_filters()
         num_bins = int(request.args.get("bins", 35))
         data = data_engine.get_distribution_data(filters, num_bins=num_bins)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -109,7 +125,7 @@ def get_control_chart():
         filters = extract_filters()
         max_samples = int(request.args.get("max_samples", 120))
         data = data_engine.get_control_chart_data(filters, max_samples=max_samples)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -118,7 +134,7 @@ def get_lines_comparison():
     try:
         filters = extract_filters()
         data = data_engine.get_lines_comparison(filters)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -127,7 +143,7 @@ def get_technology_comparison():
     try:
         filters = extract_filters()
         data = data_engine.get_technology_comparison(filters)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -136,7 +152,7 @@ def get_technologies():
     try:
         filters = extract_filters()
         data = data_engine.get_available_technologies(filters)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -147,7 +163,7 @@ def get_technology_evolution():
         technology = request.args.get("technology", "").strip() or None
         time_unit = request.args.get("time_unit", "day").strip().lower()
         data = data_engine.get_technology_evolution(filters, technology=technology, time_unit=time_unit)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -156,7 +172,7 @@ def get_production_technology():
     try:
         filters = extract_filters()
         data = data_engine.get_production_technology_distribution(filters)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -169,7 +185,7 @@ def get_samples():
         sort_by = request.args.get("sort_by", "fecha")
         sort_order = request.args.get("sort_order", "desc")
         data = data_engine.get_samples_table(filters, page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order)
-        return jsonify({"status": "success", "data": data})
+        return safe_jsonify(data)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

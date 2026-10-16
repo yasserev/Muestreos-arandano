@@ -197,10 +197,10 @@ def sync_database_if_needed(force=False):
                 variedad = str(r[10]) if r[10] is not None else None
                 desh = float(r[11]) if (r[11] is not None and not isinstance(r[11], str)) else None
                 tech = str(r[12]).strip() if r[12] is not None else None
-                cliente = str(r[13]) if r[13] is not None else None
-                tipo_envio = str(r[14]) if r[14] is not None else None
-                p_min = float(r[15]) if (r[15] is not None and not isinstance(r[15], str)) else None
-                p_max = float(r[16]) if (r[16] is not None and not isinstance(r[16], str)) else None
+                p_min = float(r[13]) if (r[13] is not None and not isinstance(r[13], str)) else None
+                p_max = float(r[14]) if (r[14] is not None and not isinstance(r[14], str)) else None
+                cliente = str(r[15]) if r[15] is not None else None
+                tipo_envio = str(r[16]) if r[16] is not None else None
 
                 # Recover nominal weight if missing/0 using max weight and dehydration
                 if (nom is None or nom == 0) and p_max and p_max > 0:
@@ -576,9 +576,9 @@ def get_kpis_and_summary(filters):
 
     # Extract all measured weights
     t_data = df[T_COLS].values
-    min_arr = df['peso_minimo'].values[:, np.newaxis]
-    max_arr = df['peso_maximo'].values[:, np.newaxis]
-    nom_arr = df['peso_nominal'].values[:, np.newaxis]
+    min_arr = pd.to_numeric(df['peso_minimo'], errors='coerce').fillna(0).values[:, np.newaxis]
+    max_arr = pd.to_numeric(df['peso_maximo'], errors='coerce').fillna(0).values[:, np.newaxis]
+    nom_arr = pd.to_numeric(df['peso_nominal'], errors='coerce').fillna(0).values[:, np.newaxis]
 
     valid_mask = ~np.isnan(t_data) & (t_data > 0)
     total_clamshells = int(np.sum(valid_mask))
@@ -590,6 +590,8 @@ def get_kpis_and_summary(filters):
             "total_clamshells": 0,
             "peso_promedio": 0,
             "desv_estandar": 0,
+            "peso_min_promedio": 0,
+            "peso_max_promedio": 0,
             "pct_en_rango": 0,
             "pct_bajo_peso": 0,
             "pct_sobrepeso": 0,
@@ -616,7 +618,7 @@ def get_kpis_and_summary(filters):
     # Underweight: valid_mins > 0 and weight < valid_mins
     under_mask = (valid_mins > 0) & (weights < valid_mins)
     # Overweight: weight > valid_maxs
-    over_mask = (weights > valid_maxs)
+    over_mask = (valid_maxs > 0) & (weights > valid_maxs)
     # In range: otherwise
     in_range_mask = ~under_mask & ~over_mask
 
@@ -631,7 +633,7 @@ def get_kpis_and_summary(filters):
     # Giveaway: excess grams above target/max_weight
     # If nominal is present, giveaway is weight - nominal when weight > nominal
     # or excess over max weight
-    excess_grams = np.maximum(0, weights - valid_maxs)
+    excess_grams = np.where(valid_maxs > 0, np.maximum(0, weights - valid_maxs), 0)
     total_giveaway_g = float(np.sum(excess_grams))
     avg_giveaway_g = float(np.mean(excess_grams))
 
@@ -639,7 +641,13 @@ def get_kpis_and_summary(filters):
     # Average LSL and USL
     valid_lsl_candidates = valid_mins[valid_mins > 0]
     avg_lsl = float(np.median(valid_lsl_candidates)) if len(valid_lsl_candidates) > 0 else 0.0
-    avg_usl = float(np.median(valid_maxs)) if len(valid_maxs) > 0 else 0.0
+    valid_usl_candidates = valid_maxs[valid_maxs > 0]
+    avg_usl = float(np.median(valid_usl_candidates)) if len(valid_usl_candidates) > 0 else 0.0
+
+    avg_lsl = 0.0 if (np.isnan(avg_lsl) or np.isinf(avg_lsl)) else avg_lsl
+    avg_usl = 0.0 if (np.isnan(avg_usl) or np.isinf(avg_usl)) else avg_usl
+    mean_weight = 0.0 if (np.isnan(mean_weight) or np.isinf(mean_weight)) else mean_weight
+    std_weight = 0.0 if (np.isnan(std_weight) or np.isinf(std_weight)) else std_weight
 
     cp = 0.0
     cpk = 0.0
@@ -662,6 +670,11 @@ def get_kpis_and_summary(filters):
         cpu = (avg_usl - mean_weight) / (3 * std_weight)
         cpk = max(0, cpu)
         cpk_status = "Aceptable (Límite superior)" if cpk >= 1.0 else "Incapaz"
+
+    cp = 0.0 if (np.isnan(cp) or np.isinf(cp)) else cp
+    cpk = 0.0 if (np.isnan(cpk) or np.isinf(cpk)) else cpk
+    total_giveaway_g = 0.0 if (np.isnan(total_giveaway_g) or np.isinf(total_giveaway_g)) else total_giveaway_g
+    avg_giveaway_g = 0.0 if (np.isnan(avg_giveaway_g) or np.isinf(avg_giveaway_g)) else avg_giveaway_g
 
     return {
         "total_muestreos": total_muestreos,
@@ -712,14 +725,35 @@ def get_scatter_data(filters, max_points=4000):
     points = []
     pt_idx = 0
 
-    median_min = float(df['peso_minimo'][df['peso_minimo'] > 0].median()) if (df['peso_minimo'] > 0).any() else 0.0
-    median_max = float(df['peso_maximo'].median()) if not df['peso_maximo'].empty else 0.0
-    median_nom = float(df['peso_nominal'].dropna().median()) if not df['peso_nominal'].dropna().empty else 0.0
+    valid_mins = pd.to_numeric(df['peso_minimo'], errors='coerce').dropna()
+    valid_mins_gt0 = valid_mins[valid_mins > 0]
+    median_min = float(valid_mins_gt0.median()) if not valid_mins_gt0.empty else 0.0
+
+    valid_maxs = pd.to_numeric(df['peso_maximo'], errors='coerce').dropna()
+    valid_maxs_gt0 = valid_maxs[valid_maxs > 0]
+    median_max = float(valid_maxs_gt0.median()) if not valid_maxs_gt0.empty else 0.0
+
+    valid_noms = pd.to_numeric(df['peso_nominal'], errors='coerce').dropna()
+    median_nom = float(valid_noms.median()) if not valid_noms.empty else 0.0
+
+    median_min = 0.0 if (np.isnan(median_min) or np.isinf(median_min)) else round(median_min, 1)
+    median_max = 0.0 if (np.isnan(median_max) or np.isinf(median_max)) else round(median_max, 1)
+    median_nom = 0.0 if (np.isnan(median_nom) or np.isinf(median_nom)) else round(median_nom, 1)
 
     raw_counter = 0
     for row_idx, row in df.iterrows():
-        p_min = row['peso_minimo']
-        p_max = row['peso_maximo']
+        try:
+            p_min = float(row['peso_minimo']) if (pd.notna(row['peso_minimo']) and row['peso_minimo'] is not None) else 0.0
+        except (ValueError, TypeError):
+            p_min = 0.0
+        try:
+            p_max = float(row['peso_maximo']) if (pd.notna(row['peso_maximo']) and row['peso_maximo'] is not None) else 0.0
+        except (ValueError, TypeError):
+            p_max = 0.0
+
+        p_min = 0.0 if (np.isnan(p_min) or np.isinf(p_min)) else p_min
+        p_max = 0.0 if (np.isnan(p_max) or np.isinf(p_max)) else p_max
+
         f_date = str(row['fecha'])
         f_time = str(row['hora']) if row['hora'] else ''
         f_line = str(row['linea'])
@@ -739,7 +773,7 @@ def get_scatter_data(filters, max_points=4000):
             status = 'in_spec'
             if p_min > 0 and val < p_min:
                 status = 'underweight'
-            elif val > p_max:
+            elif p_max > 0 and val > p_max:
                 status = 'overweight'
 
             points.append({
@@ -813,8 +847,16 @@ def get_distribution_data(filters, num_bins=35):
             freq_val = pdf_val * total_count * bin_width
             normal_curve.append(round(float(freq_val), 1))
 
-    median_min = float(df['peso_minimo'][df['peso_minimo'] > 0].median()) if (df['peso_minimo'] > 0).any() else 0.0
-    median_max = float(df['peso_maximo'].median()) if not df['peso_maximo'].empty else 0.0
+    valid_mins = pd.to_numeric(df['peso_minimo'], errors='coerce').dropna()
+    valid_mins_gt0 = valid_mins[valid_mins > 0]
+    median_min = float(valid_mins_gt0.median()) if not valid_mins_gt0.empty else 0.0
+
+    valid_maxs = pd.to_numeric(df['peso_maximo'], errors='coerce').dropna()
+    valid_maxs_gt0 = valid_maxs[valid_maxs > 0]
+    median_max = float(valid_maxs_gt0.median()) if not valid_maxs_gt0.empty else 0.0
+
+    median_min = 0.0 if (np.isnan(median_min) or np.isinf(median_min)) else round(median_min, 1)
+    median_max = 0.0 if (np.isnan(median_max) or np.isinf(median_max)) else round(median_max, 1)
 
     return {
         "bins": [round(float(b), 1) for b in bin_centers],
@@ -822,8 +864,8 @@ def get_distribution_data(filters, num_bins=35):
         "normal_curve": normal_curve,
         "mu": round(mu, 2),
         "sigma": round(sigma, 2),
-        "lsl": round(median_min, 1),
-        "usl": round(median_max, 1)
+        "lsl": median_min,
+        "usl": median_max
     }
 
 def get_control_chart_data(filters, max_samples=150):
@@ -921,8 +963,8 @@ def get_lines_comparison(filters):
         ])
 
         # Compliance per line
-        min_arr = group['peso_minimo'].values[:, np.newaxis]
-        max_arr = group['peso_maximo'].values[:, np.newaxis]
+        min_arr = pd.to_numeric(group['peso_minimo'], errors='coerce').fillna(0).values[:, np.newaxis]
+        max_arr = pd.to_numeric(group['peso_maximo'], errors='coerce').fillna(0).values[:, np.newaxis]
         min_matrix = np.repeat(min_arr, 48, axis=1)
         max_matrix = np.repeat(max_arr, 48, axis=1)
 
@@ -933,8 +975,8 @@ def get_lines_comparison(filters):
 
         total = len(w_line)
         under = int(np.sum((min_line > 0) & (w_line < min_line)))
-        over = int(np.sum(w_line > max_line))
-        in_spec = total - under - over
+        over = int(np.sum((max_line > 0) & (w_line > max_line)))
+        in_spec = max(0, total - under - over)
 
         compliance.append({
             "line": str(line_name),
