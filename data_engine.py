@@ -491,9 +491,37 @@ def get_filters():
     cur.execute("SELECT DISTINCT viaje FROM muestreos WHERE viaje IS NOT NULL AND viaje != '' ORDER BY viaje DESC LIMIT 100")
     viajes = [row[0] for row in cur.fetchall()]
 
+    # Distinct Semanas with year and ISO date boundaries (Monday to Sunday)
+    import datetime
+    cur.execute("SELECT DISTINCT fecha FROM muestreos WHERE fecha IS NOT NULL AND fecha != '' ORDER BY fecha DESC")
+    distinct_fechas = [row[0] for row in cur.fetchall()]
+
+    semanas_dict = {}
+    for f in distinct_fechas:
+        try:
+            dt = datetime.datetime.strptime(f, "%Y-%m-%d").date()
+            iso_y, iso_w, _ = dt.isocalendar()
+            key = f"{iso_y}-S{iso_w:02d}"
+            if key not in semanas_dict:
+                mon = datetime.date.fromisocalendar(iso_y, iso_w, 1)
+                sun = datetime.date.fromisocalendar(iso_y, iso_w, 7)
+                semanas_dict[key] = {
+                    "semana": key,
+                    "label": f"{key} ({mon.strftime('%d/%m')} - {sun.strftime('%d/%m')})",
+                    "fecha_desde": mon.strftime("%Y-%m-%d"),
+                    "fecha_hasta": sun.strftime("%Y-%m-%d"),
+                    "iso_year": iso_y,
+                    "iso_week": iso_w
+                }
+        except Exception:
+            pass
+
+    semanas = list(semanas_dict.values())
+
     conn.close()
     return {
         "date_range": {"min": min_date, "max": max_date},
+        "semanas": semanas,
         "turnos": turnos,
         "lineas": lineas,
         "formatos": formatos,
@@ -515,6 +543,27 @@ def build_where_clause(filters, prefix=""):
     if filters.get("fecha_hasta"):
         conditions.append(f"{p}fecha <= ?")
         params.append(filters["fecha_hasta"])
+    if filters.get("semana"):
+        sem_val = str(filters["semana"]).strip()
+        if "-S" in sem_val.upper():
+            parts = sem_val.upper().split("-S")
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                y_val = int(parts[0])
+                w_val = int(parts[1])
+                import datetime
+                mon_date = datetime.date.fromisocalendar(y_val, w_val, 1).strftime("%Y-%m-%d")
+                sun_date = datetime.date.fromisocalendar(y_val, w_val, 7).strftime("%Y-%m-%d")
+                if not filters.get("fecha_desde"):
+                    conditions.append(f"{p}fecha >= ?")
+                    params.append(mon_date)
+                if not filters.get("fecha_hasta"):
+                    conditions.append(f"{p}fecha <= ?")
+                    params.append(sun_date)
+                conditions.append(f"{p}semana = ?")
+                params.append(w_val)
+        elif sem_val.isdigit():
+            conditions.append(f"{p}semana = ?")
+            params.append(int(sem_val))
     if filters.get("turno"):
         conditions.append(f"{p}turno = ?")
         params.append(int(filters["turno"]))

@@ -76,6 +76,7 @@ def extract_filters():
     return {
         "fecha_desde": request.args.get("fecha_desde", "").strip() or None,
         "fecha_hasta": request.args.get("fecha_hasta", "").strip() or None,
+        "semana": request.args.get("semana", "").strip() or None,
         "turno": request.args.get("turno", "").strip() or None,
         "linea": request.args.get("linea", "").strip() or None,
         "viaje": request.args.get("viaje", "").strip() or None,

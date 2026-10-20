@@ -8,6 +8,7 @@ const AppState = {
     filters: {
         fecha_desde: '',
         fecha_hasta: '',
+        semana: '',
         turno: '',
         linea: '',
         viaje: '',
@@ -18,6 +19,7 @@ const AppState = {
     },
     selectedFormatos: [],
     availableFormatos: [],
+    availableSemanas: [],
     tablePagination: {
         page: 1,
         pageSize: 15,
@@ -63,6 +65,7 @@ const elements = {
     // Selects
     selectTurno: document.getElementById('filter-turno'),
     selectLinea: document.getElementById('filter-linea'),
+    selectSemana: document.getElementById('filter-semana'),
     selectFormato: document.getElementById('filter-formato'),
     // Multiselect Formato
     multiselectFormatoContainer: document.getElementById('multiselect-formato-container'),
@@ -333,9 +336,31 @@ function setupEventListeners() {
         });
     });
 
+    // Semana dropdown selection
+    elements.selectSemana?.addEventListener('change', () => {
+        const selectedOpt = elements.selectSemana.selectedOptions[0];
+        if (selectedOpt && selectedOpt.value && selectedOpt.dataset.desde && selectedOpt.dataset.hasta) {
+            elements.fechaDesde.value = selectedOpt.dataset.desde;
+            elements.fechaHasta.value = selectedOpt.dataset.hasta;
+            elements.presetBtns.forEach(b => b.classList.remove('active'));
+        }
+        syncFiltersFromUI();
+        AppState.tablePagination.page = 1;
+        fetchDashboardData();
+    });
+
+    // Clear semana if user manually changes date fields
+    elements.fechaDesde?.addEventListener('change', () => {
+        if (elements.selectSemana) elements.selectSemana.value = '';
+    });
+    elements.fechaHasta?.addEventListener('change', () => {
+        if (elements.selectSemana) elements.selectSemana.value = '';
+    });
+
     // Reset filters
     elements.btnResetFilters.addEventListener('click', () => {
         elements.filterForm.reset();
+        if (elements.selectSemana) elements.selectSemana.value = '';
         AppState.selectedFormatos = [];
         updateMultiselectTriggerUI();
         renderMultiselectOptions('');
@@ -352,6 +377,7 @@ function setupEventListeners() {
         btn.addEventListener('click', () => {
             elements.presetBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+            if (elements.selectSemana) elements.selectSemana.value = '';
             applyDatePreset(btn.dataset.preset);
             syncFiltersFromUI();
             AppState.tablePagination.page = 1;
@@ -460,6 +486,7 @@ function syncFiltersFromUI() {
     AppState.filters = {
         fecha_desde: elements.fechaDesde.value || '',
         fecha_hasta: elements.fechaHasta.value || '',
+        semana: elements.selectSemana ? (elements.selectSemana.value || '') : '',
         turno: elements.selectTurno.value || '',
         linea: elements.selectLinea.value || '',
         viaje: elements.inputViaje.value.trim() || '',
@@ -508,6 +535,19 @@ async function loadFilterOptions() {
 
         // Populate Lineas
         populateSelect(elements.selectLinea, data.lineas, 'Todas las Líneas');
+        // Populate Semanas (Year-Week ISO with Monday start)
+        if (elements.selectSemana && data.semanas) {
+            AppState.availableSemanas = data.semanas;
+            elements.selectSemana.innerHTML = '<option value="">Todas las Semanas</option>';
+            data.semanas.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.semana;
+                opt.textContent = s.label || s.semana;
+                opt.dataset.desde = s.fecha_desde;
+                opt.dataset.hasta = s.fecha_hasta;
+                elements.selectSemana.appendChild(opt);
+            });
+        }
         // Populate Formatos (Multiselect)
         initMultiselectFormato(data.formatos);
         // Populate Variedades
