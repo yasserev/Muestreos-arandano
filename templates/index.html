@@ -135,12 +135,46 @@
                         </select>
                     </div>
 
-                    <!-- 4. Formato -->
-                    <div class="filter-group">
-                        <label for="filter-formato" class="filter-label">
-                            <i class="fa-solid fa-box-open"></i> 5. Formato
-                        </label>
-                        <select id="filter-formato" class="form-control">
+                    <!-- 4. Formato (Multiselección) -->
+                    <div class="filter-group multiselect-group" id="group-formato">
+                        <div class="filter-label-row">
+                            <label for="filter-formato-trigger" class="filter-label">
+                                <i class="fa-solid fa-box-open"></i> 5. Formato
+                            </label>
+                            <span class="multiselect-count-badge" id="formato-count-badge" style="display:none;">0</span>
+                        </div>
+                        <div class="multiselect-container" id="multiselect-formato-container">
+                            <button type="button" class="multiselect-trigger form-control" id="filter-formato-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="multiselect-placeholder" id="filter-formato-text">Todos los Formatos</span>
+                                <div class="multiselect-trigger-icons">
+                                    <span class="multiselect-clear-btn" id="filter-formato-clear" title="Limpiar formatos seleccionados" style="display:none;">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </span>
+                                    <i class="fa-solid fa-chevron-down multiselect-chevron" id="filter-formato-chevron"></i>
+                                </div>
+                            </button>
+                            <div class="multiselect-dropdown" id="filter-formato-dropdown" role="listbox" aria-multiselectable="true">
+                                <div class="multiselect-header">
+                                    <div class="multiselect-search-box">
+                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                        <input type="text" class="multiselect-search-input" id="filter-formato-search" placeholder="Buscar formato..." autocomplete="off">
+                                    </div>
+                                    <div class="multiselect-actions">
+                                        <button type="button" class="btn-ms-action" id="btn-formato-select-all" title="Seleccionar todos los formatos disponibles">Todos</button>
+                                        <button type="button" class="btn-ms-action" id="btn-formato-clear-all" title="Deseleccionar todos">Limpiar</button>
+                                    </div>
+                                </div>
+                                <div class="multiselect-options" id="filter-formato-options">
+                                    <!-- Inyectado dinámicamente desde dashboard.js -->
+                                </div>
+                                <div class="multiselect-footer">
+                                    <span class="multiselect-footer-count" id="filter-formato-footer-count">Todos los formatos</span>
+                                    <button type="button" class="btn btn-sm btn-primary multiselect-apply-btn" id="btn-formato-apply">Listo</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Native multiple select hidden for backwards compatibility -->
+                        <select id="filter-formato" class="visually-hidden" multiple style="display:none;" aria-hidden="true">
                             <option value="">Todos los Formatos</option>
                         </select>
                     </div>

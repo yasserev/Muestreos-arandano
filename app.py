@@ -66,13 +66,20 @@ def logout():
     return redirect(url_for("login"))
 
 def extract_filters():
+    formatos = request.args.getlist("formato")
+    clean_formatos = [f.strip() for f in formatos if f and f.strip()]
+    if not clean_formatos:
+        single_f = request.args.get("formato", "").strip()
+        if single_f:
+            clean_formatos = [single_f]
+
     return {
         "fecha_desde": request.args.get("fecha_desde", "").strip() or None,
         "fecha_hasta": request.args.get("fecha_hasta", "").strip() or None,
         "turno": request.args.get("turno", "").strip() or None,
         "linea": request.args.get("linea", "").strip() or None,
         "viaje": request.args.get("viaje", "").strip() or None,
-        "formato": request.args.get("formato", "").strip() or None,
+        "formato": clean_formatos if clean_formatos else None,
         "variedad": request.args.get("variedad", "").strip() or None,
         "tipo_tecnologia": request.args.get("tipo_tecnologia", "").strip() or None,
         "cliente": request.args.get("cliente", "").strip() or None

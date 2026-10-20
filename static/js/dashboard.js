@@ -16,6 +16,8 @@ const AppState = {
         tipo_tecnologia: '',
         cliente: ''
     },
+    selectedFormatos: [],
+    availableFormatos: [],
     tablePagination: {
         page: 1,
         pageSize: 15,
@@ -62,6 +64,20 @@ const elements = {
     selectTurno: document.getElementById('filter-turno'),
     selectLinea: document.getElementById('filter-linea'),
     selectFormato: document.getElementById('filter-formato'),
+    // Multiselect Formato
+    multiselectFormatoContainer: document.getElementById('multiselect-formato-container'),
+    filterFormatoTrigger: document.getElementById('filter-formato-trigger'),
+    filterFormatoText: document.getElementById('filter-formato-text'),
+    filterFormatoClear: document.getElementById('filter-formato-clear'),
+    filterFormatoChevron: document.getElementById('filter-formato-chevron'),
+    filterFormatoDropdown: document.getElementById('filter-formato-dropdown'),
+    filterFormatoSearch: document.getElementById('filter-formato-search'),
+    btnFormatoSelectAll: document.getElementById('btn-formato-select-all'),
+    btnFormatoClearAll: document.getElementById('btn-formato-clear-all'),
+    filterFormatoOptions: document.getElementById('filter-formato-options'),
+    filterFormatoFooterCount: document.getElementById('filter-formato-footer-count'),
+    btnFormatoApply: document.getElementById('btn-formato-apply'),
+    formatoCountBadge: document.getElementById('formato-count-badge'),
     selectVariedad: document.getElementById('filter-variedad'),
     selectTecnologia: document.getElementById('filter-tecnologia'),
     selectCliente: document.getElementById('filter-cliente'),
@@ -306,7 +322,6 @@ function setupEventListeners() {
     [
         elements.selectTurno,
         elements.selectLinea,
-        elements.selectFormato,
         elements.selectVariedad,
         elements.selectTecnologia,
         elements.selectCliente
@@ -321,6 +336,10 @@ function setupEventListeners() {
     // Reset filters
     elements.btnResetFilters.addEventListener('click', () => {
         elements.filterForm.reset();
+        AppState.selectedFormatos = [];
+        updateMultiselectTriggerUI();
+        renderMultiselectOptions('');
+        syncNativeSelectFormato();
         // Reset to last 30 days preset
         applyDatePreset('30d');
         syncFiltersFromUI();
@@ -444,7 +463,7 @@ function syncFiltersFromUI() {
         turno: elements.selectTurno.value || '',
         linea: elements.selectLinea.value || '',
         viaje: elements.inputViaje.value.trim() || '',
-        formato: elements.selectFormato.value || '',
+        formato: AppState.selectedFormatos.length > 0 ? [...AppState.selectedFormatos] : '',
         variedad: elements.selectVariedad.value || '',
         tipo_tecnologia: elements.selectTecnologia.value || '',
         cliente: elements.selectCliente.value || ''
@@ -455,7 +474,15 @@ function buildQueryParams(filterObj) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(filterObj)) {
         if (v !== '' && v !== null && v !== undefined) {
-            params.append(k, v);
+            if (Array.isArray(v)) {
+                v.forEach(item => {
+                    if (item !== '' && item !== null && item !== undefined) {
+                        params.append(k, item);
+                    }
+                });
+            } else {
+                params.append(k, v);
+            }
         }
     }
     return params.toString();
@@ -481,8 +508,8 @@ async function loadFilterOptions() {
 
         // Populate Lineas
         populateSelect(elements.selectLinea, data.lineas, 'Todas las Líneas');
-        // Populate Formatos
-        populateSelect(elements.selectFormato, data.formatos, 'Todos los Formatos');
+        // Populate Formatos (Multiselect)
+        initMultiselectFormato(data.formatos);
         // Populate Variedades
         populateSelect(elements.selectVariedad, data.variedades, 'Todas las Variedades');
         // Populate Tecnologias
@@ -504,6 +531,224 @@ function populateSelect(selectEl, items, defaultLabel) {
         opt.textContent = item;
         selectEl.appendChild(opt);
     });
+}
+
+// ==========================================================================
+// Multiselect Component Functions (5. Formato)
+// ==========================================================================
+
+function initMultiselectFormato(formatosList) {
+    AppState.availableFormatos = (formatosList || []).filter(Boolean);
+    renderMultiselectOptions();
+    updateMultiselectTriggerUI();
+    syncNativeSelectFormato();
+    setupMultiselectEvents();
+}
+
+function renderMultiselectOptions(searchTerm = '') {
+    if (!elements.filterFormatoOptions) return;
+    const term = searchTerm.trim().toLowerCase();
+    const filtered = term 
+        ? AppState.availableFormatos.filter(f => f.toLowerCase().includes(term))
+        : AppState.availableFormatos;
+
+    if (filtered.length === 0) {
+        elements.filterFormatoOptions.innerHTML = `
+            <div class="multiselect-empty-message">
+                <i class="fa-solid fa-magnifying-glass"></i> No se encontraron formatos
+            </div>
+        `;
+        return;
+    }
+
+    elements.filterFormatoOptions.innerHTML = filtered.map(fmt => {
+        const isSelected = AppState.selectedFormatos.includes(fmt);
+        const escapedFmt = encodeURIComponent(fmt);
+        return `
+            <div class="multiselect-option ${isSelected ? 'is-selected' : ''}" data-format="${escapedFmt}">
+                <div class="multiselect-checkbox">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+                <span class="multiselect-option-label" title="${fmt}">${fmt}</span>
+            </div>
+        `;
+    }).join('');
+
+    elements.filterFormatoOptions.querySelectorAll('.multiselect-option').forEach(optEl => {
+        optEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const rawFormat = decodeURIComponent(optEl.dataset.format);
+            toggleFormatoSelection(rawFormat);
+        });
+    });
+}
+
+function toggleFormatoSelection(fmt) {
+    const idx = AppState.selectedFormatos.indexOf(fmt);
+    if (idx > -1) {
+        AppState.selectedFormatos.splice(idx, 1);
+    } else {
+        AppState.selectedFormatos.push(fmt);
+    }
+    updateMultiselectTriggerUI();
+    renderMultiselectOptions(elements.filterFormatoSearch?.value || '');
+    syncNativeSelectFormato();
+
+    syncFiltersFromUI();
+    AppState.tablePagination.page = 1;
+    fetchDashboardData();
+}
+
+function updateMultiselectTriggerUI() {
+    const count = AppState.selectedFormatos.length;
+    const total = AppState.availableFormatos.length;
+
+    if (!elements.filterFormatoText) return;
+
+    if (count === 0) {
+        elements.filterFormatoText.textContent = 'Todos los Formatos';
+        elements.filterFormatoText.classList.add('is-empty');
+        if (elements.filterFormatoClear) elements.filterFormatoClear.style.display = 'none';
+        if (elements.formatoCountBadge) elements.formatoCountBadge.style.display = 'none';
+        if (elements.filterFormatoFooterCount) elements.filterFormatoFooterCount.textContent = 'Todos los formatos';
+    } else if (count === 1) {
+        elements.filterFormatoText.textContent = AppState.selectedFormatos[0];
+        elements.filterFormatoText.classList.remove('is-empty');
+        if (elements.filterFormatoClear) elements.filterFormatoClear.style.display = 'inline-flex';
+        if (elements.formatoCountBadge) {
+            elements.formatoCountBadge.textContent = '1';
+            elements.formatoCountBadge.style.display = 'inline-block';
+        }
+        if (elements.filterFormatoFooterCount) elements.filterFormatoFooterCount.textContent = `1 de ${total} seleccionado`;
+    } else if (count === total && total > 0) {
+        elements.filterFormatoText.textContent = 'Todos los Formatos';
+        elements.filterFormatoText.classList.remove('is-empty');
+        if (elements.filterFormatoClear) elements.filterFormatoClear.style.display = 'inline-flex';
+        if (elements.formatoCountBadge) {
+            elements.formatoCountBadge.textContent = `${count}`;
+            elements.formatoCountBadge.style.display = 'inline-block';
+        }
+        if (elements.filterFormatoFooterCount) elements.filterFormatoFooterCount.textContent = `Todos (${total}) seleccionados`;
+    } else {
+        elements.filterFormatoText.textContent = `${count} formatos seleccionados`;
+        elements.filterFormatoText.classList.remove('is-empty');
+        if (elements.filterFormatoClear) elements.filterFormatoClear.style.display = 'inline-flex';
+        if (elements.formatoCountBadge) {
+            elements.formatoCountBadge.textContent = `${count}`;
+            elements.formatoCountBadge.style.display = 'inline-block';
+        }
+        if (elements.filterFormatoFooterCount) elements.filterFormatoFooterCount.textContent = `${count} de ${total} seleccionados`;
+    }
+}
+
+function syncNativeSelectFormato() {
+    if (!elements.selectFormato) return;
+    elements.selectFormato.innerHTML = '';
+    AppState.availableFormatos.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        if (AppState.selectedFormatos.includes(f)) {
+            opt.selected = true;
+        }
+        elements.selectFormato.appendChild(opt);
+    });
+}
+
+let multiselectEventsConfigured = false;
+function setupMultiselectEvents() {
+    if (multiselectEventsConfigured) return;
+    multiselectEventsConfigured = true;
+
+    // Toggle dropdown
+    elements.filterFormatoTrigger?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = elements.multiselectFormatoContainer?.classList.contains('is-open');
+        if (isOpen) {
+            closeMultiselectDropdown();
+        } else {
+            openMultiselectDropdown();
+        }
+    });
+
+    // Clear icon in trigger
+    elements.filterFormatoClear?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearMultiselectSelection();
+    });
+
+    // Live search inside dropdown
+    elements.filterFormatoSearch?.addEventListener('input', (e) => {
+        renderMultiselectOptions(e.target.value);
+    });
+
+    // Don't close on click inside dropdown
+    elements.filterFormatoDropdown?.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    // "Todos" action button
+    elements.btnFormatoSelectAll?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        AppState.selectedFormatos = [...AppState.availableFormatos];
+        updateMultiselectTriggerUI();
+        renderMultiselectOptions(elements.filterFormatoSearch?.value || '');
+        syncNativeSelectFormato();
+        syncFiltersFromUI();
+        AppState.tablePagination.page = 1;
+        fetchDashboardData();
+    });
+
+    // "Limpiar" action button
+    elements.btnFormatoClearAll?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearMultiselectSelection();
+    });
+
+    // "Listo" button in footer
+    elements.btnFormatoApply?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeMultiselectDropdown();
+    });
+
+    // Click outside to close
+    document.addEventListener('click', (e) => {
+        if (!elements.multiselectFormatoContainer?.contains(e.target)) {
+            closeMultiselectDropdown();
+        }
+    });
+
+    // Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeMultiselectDropdown();
+        }
+    });
+}
+
+function openMultiselectDropdown() {
+    elements.multiselectFormatoContainer?.classList.add('is-open');
+    elements.filterFormatoTrigger?.setAttribute('aria-expanded', 'true');
+    setTimeout(() => {
+        elements.filterFormatoSearch?.focus();
+    }, 50);
+}
+
+function closeMultiselectDropdown() {
+    elements.multiselectFormatoContainer?.classList.remove('is-open');
+    elements.filterFormatoTrigger?.setAttribute('aria-expanded', 'false');
+    if (elements.filterFormatoSearch) elements.filterFormatoSearch.value = '';
+    renderMultiselectOptions('');
+}
+
+function clearMultiselectSelection() {
+    AppState.selectedFormatos = [];
+    updateMultiselectTriggerUI();
+    renderMultiselectOptions(elements.filterFormatoSearch?.value || '');
+    syncNativeSelectFormato();
+    syncFiltersFromUI();
+    AppState.tablePagination.page = 1;
+    fetchDashboardData();
 }
 
 // Main Data Fetcher

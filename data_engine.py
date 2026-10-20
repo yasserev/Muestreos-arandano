@@ -525,8 +525,21 @@ def build_where_clause(filters, prefix=""):
         conditions.append(f"{p}viaje = ?")
         params.append(str(filters["viaje"]))
     if filters.get("formato"):
-        conditions.append(f"{p}formato = ?")
-        params.append(filters["formato"])
+        fmt = filters["formato"]
+        if isinstance(fmt, (list, tuple, set)):
+            fmt_list = [str(x).strip() for x in fmt if str(x).strip()]
+            if len(fmt_list) == 1:
+                conditions.append(f"{p}formato = ?")
+                params.append(fmt_list[0])
+            elif len(fmt_list) > 1:
+                placeholders = ", ".join(["?"] * len(fmt_list))
+                conditions.append(f"{p}formato IN ({placeholders})")
+                params.extend(fmt_list)
+        else:
+            fmt_str = str(fmt).strip()
+            if fmt_str:
+                conditions.append(f"{p}formato = ?")
+                params.append(fmt_str)
     if filters.get("variedad"):
         conditions.append(f"{p}variedad = ?")
         params.append(filters["variedad"])
